@@ -706,7 +706,23 @@ table{font-variant-numeric:tabular-nums}
 
 <div id="modal" class="modal hidden"><div class="dialog" id="dialog"></div></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCeeHUCuY0oGYhIPFeE1fhJk6-_O9eYxVU",
+  authDomain: "talca-expedicion.firebaseapp.com",
+  projectId: "talca-expedicion",
+  storageBucket: "talca-expedicion.firebasestorage.app",
+  messagingSenderId: "658825484631",
+  appId: "1:658825484631:web:cb95fdc34a838b6306c612",
+  measurementId: "G-HXL7VNKPJ7"
+};
+firebase.initializeApp(firebaseConfig);
+const firestoreDb = firebase.firestore();
+const docRef = firestoreDb.collection("talca").doc("data");
+let isFirebaseReady = false;
 const PRODUCT_SEED=[
  {id:'5670',name:'Talca Cola 3 L',pack:6,perCut:15,cuts:4},
  {id:'5675',name:'Talca Lima Limón 3 L',pack:6,perCut:15,cuts:4},
@@ -770,6 +786,17 @@ function load(){
  return data
 }
 let db=load();
+
+docRef.onSnapshot((doc) => {
+  if (doc.exists) {
+    db = doc.data();
+  } else {
+    docRef.set(db).catch(console.error);
+  }
+  isFirebaseReady = true;
+  try { if(typeof renderAll === 'function') renderAll(); } catch(e){}
+});
+
 let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
 function save(){
  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
