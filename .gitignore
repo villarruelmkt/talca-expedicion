@@ -1,0 +1,7 @@
+# Backups de base de datos
+*.json
+talca_backup_*.json
+
+# Entornos y configuración local
+.agents/
+*.code-workspace

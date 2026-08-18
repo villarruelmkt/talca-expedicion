@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Subir Backup a Firebase</title>
+  <style>
+    body { font-family: sans-serif; padding: 40px; text-align: center; background: #f3f5f9; }
+    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+    button { background: #19417f; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; margin-top: 20px; }
+    #status { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Restaurar Backup a la Nube</h2>
+    <p>Selecciona tu archivo JSON de backup para subirlo a Firebase.</p>
+    <input type="file" id="fileInput" accept=".json">
+    <br>
+    <button id="uploadBtn">Subir a la nube</button>
+    <p id="status"></p>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCeeHUCuY0oGYhIPFeE1fhJk6-_O9eYxVU",
+      authDomain: "talca-expedicion.firebaseapp.com",
+      projectId: "talca-expedicion",
+      storageBucket: "talca-expedicion.firebasestorage.app",
+      messagingSenderId: "658825484631",
+      appId: "1:658825484631:web:cb95fdc34a838b6306c612",
+      measurementId: "G-HXL7VNKPJ7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const firestoreDb = firebase.firestore();
+    const docRef = firestoreDb.collection("talca").doc("data");
+
+    document.getElementById('uploadBtn').addEventListener('click', () => {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return alert('Por favor, selecciona un archivo JSON primero.');
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const raw = JSON.parse(e.target.result);
+          // Los backups generados tienen la BD real dentro de "data"
+          const dbPayload = raw.data ? raw.data : raw;
+          
+          document.getElementById('status').innerText = 'Subiendo a la nube, por favor espera...';
+          document.getElementById('status').style.color = '#d2a23a';
+          
+          await docRef.set(dbPayload);
+          
+          document.getElementById('status').innerText = '¡Backup subido con éxito! Ya puedes abrir tu app en Vercel.';
+          document.getElementById('status').style.color = 'green';
+        } catch(err) {
+          document.getElementById('status').innerText = 'Error: ' + err.message;
+          document.getElementById('status').style.color = 'red';
+        }
+      };
+      reader.readAsText(file);
+    });
+  </script>
+</body>
+</html>
