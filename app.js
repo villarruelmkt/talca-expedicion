@@ -78,17 +78,33 @@ let db=load();
 
 docRef.onSnapshot((doc) => {
   if (doc.exists) {
-    db = doc.data();
+    let cloudDb = doc.data();
+    // Compare timestamps to prevent older cloud data from overwriting newer local data
+    let localLastDate = (db && db.audit && db.audit.length) ? new Date(db.audit[db.audit.length-1].date).getTime() : 0;
+    let cloudLastDate = (cloudDb && cloudDb.audit && cloudDb.audit.length) ? new Date(cloudDb.audit[cloudDb.audit.length-1].date).getTime() : 0;
+    
+    if (localLastDate > cloudLastDate) {
+      console.log('Local data is newer. Pushing to cloud to sync...');
+      docRef.set(db).catch(console.error);
+    } else {
+      console.log('Cloud data is newer or equal. Updating local memory.');
+      db = cloudDb;
+      safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+    }
   } else {
     docRef.set(db).catch(console.error);
   }
   isFirebaseReady = true;
+  try { if(typeof fillLoginUsers === 'function') fillLoginUsers(); } catch(e){}
   try { if(typeof renderAll === 'function') renderAll(); } catch(e){}
 });
 
 let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
 function save(){
  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+ if (isFirebaseReady) {
+   docRef.set(db).catch(console.error);
+ }
  try{renderAll()}
  catch(err){
    console.error('Error al actualizar la interfaz:',err);
