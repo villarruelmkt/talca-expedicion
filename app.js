@@ -2791,7 +2791,7 @@ function renderMovementsV16(){
     <td>${g.neutral?v16FmtFardos(g.neutral):''}</td>
     <td>${v14Text(g.user||'')}</td>
     <td>${v14Text(g.shift||'')}</td>
-    <td class="no-print">${g.key.startsWith('SINGLE|') && (g.type === 'Producción' || g.type.startsWith('Recepción')) ? '<button class="btn btn-secondary" onclick="editMovement(\\'' + g.key.split('|')[1] + '\\')">Corregir</button>' : ''}</td>
+    <td class="no-print">${g.key.startsWith('SINGLE|') && (g.type === 'Producción' || g.type.startsWith('Recepción')) ? \`<button class="btn btn-secondary" onclick="editMovement('\${g.key.split('|')[1]}')">Corregir</button>\` : ''}</td>
   </tr>`).join('')||'<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
 }
 renderMovementsV11=renderMovementsV16;
