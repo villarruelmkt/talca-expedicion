@@ -2815,15 +2815,7 @@ function v16AttachMaterialKeyboard(sequence,afterId){
     });
   });
 }
-    </div>
-  </div><div class="v16-material-help">Presione Enter para confirmar el campo y avanzar al siguiente dato de materiales.</div>`;
 
-  v16AttachMaterialKeyboard(
-    ['v11DispatchPalletOut','v11DispatchChapOut','v11DispatchPalletIn','v11DispatchChapIn'],
-    'v11DispatchNote'
-  );
-  recalcPendingDispatchV11();
-}
 
 // Envolver los editores actuales sin alterar su lógica.
 const _v16OpenOrderEditor=v13OpenOrderEditor;
