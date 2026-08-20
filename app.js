@@ -10,6 +10,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const firestoreDb = firebase.firestore();
+firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
 const docRef = firestoreDb.collection("talca").doc("data");
 let isFirebaseReady = false;
 const PRODUCT_SEED=[
@@ -136,6 +137,15 @@ document.addEventListener('DOMContentLoaded',()=>{
  let warning=document.getElementById('mobileFileWarning');
  if(warning&&location.protocol==='file:'&&/iPhone|iPad|iPod/i.test(navigator.userAgent))warning.classList.remove('hidden');
  if(session)start();
+ 
+ window.addEventListener('offline', () => {
+   let banner = document.getElementById('offlineBanner');
+   if (banner) banner.classList.remove('hidden');
+ });
+ window.addEventListener('online', () => {
+   let banner = document.getElementById('offlineBanner');
+   if (banner) banner.classList.add('hidden');
+ });
 
  document.addEventListener('wheel', (e) => {
    if (document.activeElement && document.activeElement.type === 'number') {
