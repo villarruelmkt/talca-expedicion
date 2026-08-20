@@ -130,12 +130,31 @@ function doLogin(){
 }
 function logout(){safeRemove(sessionStorage,'talcaSession');location.reload()}
 function changeShift(){let n=prompt('Turno activo (Mañana o Tarde):',session.shift);if(n&&['mañana','tarde'].includes(n.toLowerCase())){session.shift=n[0].toUpperCase()+n.slice(1).toLowerCase();safeSet(sessionStorage,'talcaSession',JSON.stringify(session));start()}}
-function start(){login.classList.add('hidden');app.classList.remove('hidden');sessionBadge.textContent=session.user+' · '+session.shift;todayText.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});accreditEmployees();renderAll()}
+function start(){login.classList.add('hidden');app.classList.remove('hidden');sessionBadge.textContent=session.user+' · '+session.shift;todayText.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});accreditEmployees();if(!localStorage.getItem('wiped_v17')){db.orders=[];db.movements=[];db.materialMoves=[];db.counts=[];db.audit=[];for(let k in db.stock)db.stock[k]=0;localStorage.setItem('wiped_v17','true');save();alert('Base de datos limpiada y lista para v1.7')}renderAll()}
 document.addEventListener('DOMContentLoaded',()=>{
  fillLoginUsers();
  let warning=document.getElementById('mobileFileWarning');
  if(warning&&location.protocol==='file:'&&/iPhone|iPad|iPod/i.test(navigator.userAgent))warning.classList.remove('hidden');
  if(session)start();
+
+ document.addEventListener('wheel', (e) => {
+   if (document.activeElement && document.activeElement.type === 'number') {
+     document.activeElement.blur();
+   }
+ });
+
+ document.addEventListener('keydown', (e) => {
+   if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
+     let focusable = Array.from(document.querySelectorAll('input:not([type="hidden"]), select, textarea, button:not(.navbtn)'))
+       .filter(el => !el.disabled && el.offsetParent !== null);
+     let index = focusable.indexOf(e.target);
+     if (index > -1 && index + 1 < focusable.length) {
+       e.preventDefault();
+       focusable[index + 1].focus();
+       if(focusable[index + 1].select) focusable[index + 1].select();
+     }
+   }
+ });
 });
 document.querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
 function showPage(id){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('active',x.dataset.page===id));renderAll()}
@@ -774,8 +793,8 @@ function savePendingDispatchV11(orderId){
    addStockMove({type:l.productId===l.sourceProductId?'Orden de carga':'Orden de carga · Sustitución',ref:o.number,productId:l.productId,total:l.total,dir:'out',note:just});
    let req=v11FindRequestLine(o,l.sourceProductId);if(req&&l.productId===l.sourceProductId){let applied=Math.min(v11LineOutstanding(req),l.total);req.resolvedTotal=Number(req.resolvedTotal||0)+applied;v11DecreasePending(o.pendingType,l.sourceProductId,applied)}
  });
- let delivery={id:uid('d'),date:now(),lines,result:'Salida confirmada',note:document.getElementById('v11DispatchNote').value,stockJustification:just,user:session.user,shift:session.shift,palletOut:+document.getElementById('v11DispatchPalletOut').value||0,palletIn:+document.getElementById('v11DispatchPalletIn').value||0,chapOut:+document.getElementById('v11DispatchChapOut').value||0,chapIn:+document.getElementById('v11DispatchChapIn').value||0};
- o.deliveries.push(delivery);if(lines.some(l=>l.productId!==l.sourceProductId))o.billing='Pendiente de aviso';o.status=v11OrderStatus(o);addMaterialMove({fleteroId:o.fleteroId,ref:o.number,source:'Orden de carga',palletOut:delivery.palletOut,palletIn:delivery.palletIn,chapOut:delivery.chapOut,chapIn:delivery.chapIn});audit('Salida','Orden',o.number,o.status);save();closeModal();showPage('orders')
+ let delivery={id:uid('d'),date:now(),lines,result:'Salida confirmada',note:document.getElementById('v11DispatchNote').value,stockJustification:just,user:session.user,shift:session.shift};
+ o.deliveries.push(delivery);if(lines.some(l=>l.productId!==l.sourceProductId))o.billing='Pendiente de aviso';o.status=v11OrderStatus(o);audit('Salida','Orden',o.number,o.status);save();closeModal();showPage('orders')
 }
 
 viewOrder=function(id){
@@ -1301,8 +1320,8 @@ function v13OpenOrderEditor(existingId=''){
   let actual=v13ActualTotals(o);
   modal(`<div class="headrow"><div><h2>${o?`Corregir orden ${v13Esc(o.number)}`:'Nueva orden de carga'}</h2><div class="muted">${o?'Los cambios conservarán el historial anterior.':'Puede dejarla como PENDIENTE sin impacto hasta que se defina su salida.'}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
   <div class="formgrid">
-    <div><label>Número de orden</label><input id="v13Number" class="field" value="${v13Esc(o?.number||'')}"></div>
     <div><label>Fecha</label><input id="v13Date" class="field" type="date" value="${v13Esc(o?.date||new Date().toISOString().slice(0,10))}"></div>
+    <div><label>Número de orden</label><input id="v13Number" class="field" value="${v13Esc(o?.number||'')}" autofocus></div>
     <div><label>Estado / afectación</label><select id="v13OrderType" onchange="v13ToggleMode()">${v13TypeOptions(type)}</select></div>
     <div><label>Estado de Facturación</label><select id="v13Billing"><option ${!o||o.billing==='No aplica'?'selected':''}>No aplica</option><option ${o?.billing==='Pendiente'?'selected':''}>Pendiente</option><option ${o?.billing==='Pagada'?'selected':''}>Pagada</option><option ${o?.billing==='Pendiente de aviso'?'selected':''}>Pendiente de aviso</option><option ${o?.billing==='Corregida'?'selected':''}>Corregida</option></select></div>
     <div class="span3 v13-carrier-box">
@@ -1321,14 +1340,6 @@ function v13OpenOrderEditor(existingId=''){
   ${hasDeliveries?'<div class="alert"><b>La orden ya tiene salidas confirmadas.</b> Puede corregir datos generales y cantidades solicitadas. El historial de entregas seguirá visible; no se elimina.</div>':''}
   <div id="v13ModeInfo" class="alert v13-mode-card"></div>
   <div class="lineitems"><div class="headrow"><h3>Productos de la orden</h3><button type="button" class="btn btn-secondary" onclick="v13AddOrderLine()">Agregar producto</button></div><div id="v13OrderLines"></div></div>
-  <div id="v13Materials" class="summary"><div class="summarygrid">
-    <div><span class="muted">Planchadas sugeridas</span><b id="v13SuggestPallet">0</b></div>
-    <div><label>Planchadas que lleva</label><input id="v13PalletOut" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.palletOut||0)}"></div>
-    <div><label>Planchadas que devuelve</label><input id="v13PalletIn" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.palletIn||0)}"></div>
-    <div><span class="muted">Chapadur sugerido</span><b id="v13SuggestChap">0</b></div>
-    <div><label>Chapadur que lleva</label><input id="v13ChapOut" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.chapOut||0)}"></div>
-    <div><label>Chapadur que devuelve</label><input id="v13ChapIn" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.chapIn||0)}"></div>
-  </div></div>
   <div id="v13StockWarning"></div>
   <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button id="v13SaveButton" class="btn btn-primary" onclick="v13SaveOrder()">Guardar orden</button></div>`);
   let lines=o?.requestLines?.length?o.requestLines:[null];
@@ -2300,14 +2311,7 @@ openPendingDispatchV11=function(o){
   }).join('')}</div>
   <div class="headrow" style="margin-top:16px"><h3>Mercadería realmente entregada</h3><button class="btn btn-secondary" onclick="addPendingDispatchLineV11('', '', 0)">Agregar línea</button></div>
   <div id="v11DispatchLines"></div>
-  <div class="summary"><div class="summarygrid">
-    <div><span class="muted">Planchadas sugeridas</span><b id="v11DispatchPalletSuggest">0</b></div>
-    <div><label>Planchadas que lleva</label><input id="v11DispatchPalletOut" class="field" type="number" min="0" value="0"></div>
-    <div><label>Planchadas que devuelve</label><input id="v11DispatchPalletIn" class="field" type="number" min="0" value="0"></div>
-    <div><span class="muted">Chapadur sugerido</span><b id="v11DispatchChapSuggest">0</b></div>
-    <div><label>Chapadur que lleva</label><input id="v11DispatchChapOut" class="field" type="number" min="0" value="0"></div>
-    <div><label>Chapadur que devuelve</label><input id="v11DispatchChapIn" class="field" type="number" min="0" value="0"></div>
-  </div></div>
+
   <label>Observaciones</label><textarea id="v11DispatchNote"></textarea>
   <div id="v11DispatchWarning"></div>
   <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="savePendingDispatchV11('${o.id}')">Confirmar salida</button></div>`);
@@ -2783,81 +2787,6 @@ function v16AttachMaterialKeyboard(sequence,afterId){
     });
   });
 }
-function v16ArrangeOrderMaterials(){
-  let container=document.getElementById('v13Materials');
-  if(!container)return;
-
-  let pSuggest=document.getElementById('v13SuggestPallet')?.textContent||'0',
-      cSuggest=document.getElementById('v13SuggestChap')?.textContent||'0',
-      pOut=document.getElementById('v13PalletOut')?.value||'0',
-      cOut=document.getElementById('v13ChapOut')?.value||'0',
-      pIn=document.getElementById('v13PalletIn')?.value||'0',
-      cIn=document.getElementById('v13ChapIn')?.value||'0';
-
-  container.innerHTML=`<div class="v16-material-entry-grid">
-    <div class="v16-material-column">
-      <h4>Sugeridos</h4>
-      <div class="v16-material-pair">
-        <div class="v16-material-stat"><span>Planchadas</span><b id="v13SuggestPallet">${v14Text(pSuggest)}</b></div>
-        <div class="v16-material-stat"><span>Chapadur</span><b id="v13SuggestChap">${v14Text(cSuggest)}</b></div>
-      </div>
-    </div>
-    <div class="v16-material-column">
-      <h4>Lleva</h4>
-      <div class="v16-material-pair">
-        ${v16MaterialInputHTML('v13PalletOut','Planchadas',pOut)}
-        ${v16MaterialInputHTML('v13ChapOut','Chapadur',cOut)}
-      </div>
-    </div>
-    <div class="v16-material-column">
-      <h4>Devuelve</h4>
-      <div class="v16-material-pair">
-        ${v16MaterialInputHTML('v13PalletIn','Planchadas',pIn)}
-        ${v16MaterialInputHTML('v13ChapIn','Chapadur',cIn)}
-      </div>
-    </div>
-  </div><div class="v16-material-help">Presione Enter para confirmar el campo y avanzar al siguiente dato de materiales.</div>`;
-
-  v16AttachMaterialKeyboard(
-    ['v13PalletOut','v13ChapOut','v13PalletIn','v13ChapIn'],
-    'v13Note'
-  );
-  v13RecalcOrder();
-}
-function v16ArrangeDispatchMaterials(){
-  let first=document.getElementById('v11DispatchPalletSuggest');
-  if(!first)return;
-  let summary=first.closest('.summary');
-  if(!summary)return;
-
-  let pSuggest=first.textContent||'0',
-      cSuggest=document.getElementById('v11DispatchChapSuggest')?.textContent||'0',
-      pOut=document.getElementById('v11DispatchPalletOut')?.value||'0',
-      cOut=document.getElementById('v11DispatchChapOut')?.value||'0',
-      pIn=document.getElementById('v11DispatchPalletIn')?.value||'0',
-      cIn=document.getElementById('v11DispatchChapIn')?.value||'0';
-
-  summary.innerHTML=`<div class="v16-material-entry-grid">
-    <div class="v16-material-column">
-      <h4>Sugeridos</h4>
-      <div class="v16-material-pair">
-        <div class="v16-material-stat"><span>Planchadas</span><b id="v11DispatchPalletSuggest">${v14Text(pSuggest)}</b></div>
-        <div class="v16-material-stat"><span>Chapadur</span><b id="v11DispatchChapSuggest">${v14Text(cSuggest)}</b></div>
-      </div>
-    </div>
-    <div class="v16-material-column">
-      <h4>Lleva</h4>
-      <div class="v16-material-pair">
-        ${v16MaterialInputHTML('v11DispatchPalletOut','Planchadas',pOut)}
-        ${v16MaterialInputHTML('v11DispatchChapOut','Chapadur',cOut)}
-      </div>
-    </div>
-    <div class="v16-material-column">
-      <h4>Devuelve</h4>
-      <div class="v16-material-pair">
-        ${v16MaterialInputHTML('v11DispatchPalletIn','Planchadas',pIn)}
-        ${v16MaterialInputHTML('v11DispatchChapIn','Chapadur',cIn)}
-      </div>
     </div>
   </div><div class="v16-material-help">Presione Enter para confirmar el campo y avanzar al siguiente dato de materiales.</div>`;
 
@@ -2871,15 +2800,11 @@ function v16ArrangeDispatchMaterials(){
 // Envolver los editores actuales sin alterar su lógica.
 const _v16OpenOrderEditor=v13OpenOrderEditor;
 v13OpenOrderEditor=function(existingId=''){
-  let result=_v16OpenOrderEditor(existingId);
-  v16ArrangeOrderMaterials();
-  return result;
+  return _v16OpenOrderEditor(existingId);
 };
 const _v16OpenPendingDispatch=openPendingDispatchV11;
 openPendingDispatchV11=function(o){
-  let result=_v16OpenPendingDispatch(o);
-  v16ArrangeDispatchMaterials();
-  return result;
+  return _v16OpenPendingDispatch(o);
 };
 
 // ------------------------------------------------------------------
@@ -3130,4 +3055,63 @@ renderAll=function(){
   renderMaterials();
 };
 renderAll();
+
+function openShiftMaterials() {
+  let today = new Date().toISOString().slice(0, 10);
+  let fleteros = new Set();
+  
+  db.orders.forEach(o => {
+    let hasDeliveryThisShift = (o.deliveries || []).some(d => d.date.startsWith(today) && d.shift === session.shift);
+    if (o.date === today || hasDeliveryThisShift) {
+      if (o.fleteroId) fleteros.add(o.fleteroId);
+    }
+  });
+
+  let options = Array.from(fleteros).map(id => {
+    let f = db.fleteros.find(x => x.id === id);
+    return `<option value="${id}">${f ? f.name : id}</option>`;
+  }).join('');
+
+  if (!options) {
+    options = `<option value="">No hay fleteros activos en este turno</option>` + fleteroOptions();
+  }
+
+  modal(`<div class="headrow"><h2>Nueva Carga de Materiales por Turno</h2><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
+  <div class="formgrid">
+    <div><label>Fletero</label><select id="smCarrier">${options}</select></div>
+    <div><label>Planchadas entregadas al fletero</label><input id="smPalletOut" class="field" type="number" min="0" value="0"></div>
+    <div><label>Planchadas devueltas por el fletero</label><input id="smPalletIn" class="field" type="number" min="0" value="0"></div>
+    <div><label>Chapadur entregado al fletero</label><input id="smChapOut" class="field" type="number" min="0" value="0"></div>
+    <div><label>Chapadur devuelto por el fletero</label><input id="smChapIn" class="field" type="number" min="0" value="0"></div>
+    <div class="span3"><label>Observaciones</label><input id="smNote" class="field"></div>
+  </div>
+  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveShiftMaterials()">Guardar</button></div>`);
+  
+  v16AttachMaterialKeyboard(
+    ['smPalletOut','smPalletIn','smChapOut','smChapIn'],
+    'smNote'
+  );
+}
+
+function saveShiftMaterials() {
+  let carrier = document.getElementById('smCarrier').value;
+  if (!carrier) return alert('Seleccione un fletero válido.');
+  
+  addMaterialMove({
+    fleteroId: carrier,
+    ref: 'Turno ' + session.shift,
+    source: 'Carga por turno',
+    palletOut: +document.getElementById('smPalletOut').value || 0,
+    palletIn: +document.getElementById('smPalletIn').value || 0,
+    chapOut: +document.getElementById('smChapOut').value || 0,
+    chapIn: +document.getElementById('smChapIn').value || 0
+  });
+  
+  let move = db.materialMoves[db.materialMoves.length - 1];
+  if (move) move.note = document.getElementById('smNote').value;
+  
+  save();
+  closeModal();
+  renderMaterials();
+}
 
