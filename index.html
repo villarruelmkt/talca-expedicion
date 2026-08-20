@@ -140,7 +140,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 <section id="movements" class="page hidden">
   <div class="headrow"><div><h1>Libro de movimientos</h1><div class="muted">Trazabilidad de ingresos, salidas y movimientos sin impacto físico.</div></div><div class="toolbar no-print"><button class="btn btn-secondary" onclick="openMovement('Rebote')">Nuevo rebote</button><button class="btn btn-secondary" onclick="openMovement('Derrame')">Nuevo derrame</button></div></div>
-  <div class="card tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Referencia</th><th>Entrada total</th><th>Salida total</th><th>Sin impacto</th><th>Encargado</th><th>Turno</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
+  <div class="card tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Referencia</th><th>Entrada total</th><th>Salida total</th><th>Sin impacto</th><th>Encargado</th><th>Turno</th><th class="no-print"></th></tr></thead><tbody id="movementsBody"></tbody></table></div>
 </section>
 
 <section id="materials" class="page hidden">
@@ -188,7 +188,7 @@ window.addEventListener('unhandledrejection', function(event) {
   <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
     <div class="card"><div class="headrow"><h3>Usuarios</h3><button class="btn btn-secondary" onclick="addUser()">Agregar</button></div><div id="usersList"></div></div>
     <div class="card"><div class="headrow"><h3>Fleteros</h3><button class="btn btn-secondary" onclick="addFletero()">Agregar</button></div><div id="fleterosList"></div></div>
-    <div class="card"><div class="headrow"><h3>Empleados</h3><button class="btn btn-secondary" onclick="addEmployee()">Agregar</button></div><div id="employeeConfigList"></div></div>
+    <div class="card"><div class="headrow"><h3>Empleados</h3><div><button class="btn btn-secondary" onclick="manualAccreditEmployees()">Acreditar fardos</button> <button class="btn btn-secondary" onclick="addEmployee()">Agregar</button></div></div><div id="employeeConfigList"></div></div>
     <div class="card"><div class="headrow"><h3>Productos</h3><button class="btn btn-secondary" onclick="addProduct()">Agregar</button></div><div id="productsList"></div></div>
   </div>
 </section>
