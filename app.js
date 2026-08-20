@@ -548,7 +548,59 @@ function clearOrderFilters(){ofCarrier.value='';ofDate.value='';ofUser.value='';
 function clearMaterialFilters(){mfCarrier.value='';mfFrom.value='';mfTo.value='';mfSource.value='';renderMaterials()}
 function printSection(id,title){document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-target'));let p=document.getElementById(id);p.classList.add('print-target');let rt=p.querySelector('.report-title');if(rt)rt.textContent=title;window.print();p.classList.remove('print-target')}
 function renderOrders(){if(!document.getElementById('ordersBody'))return;let carrier=ofCarrier?.value||'',date=ofDate?.value||'',user=ofUser?.value||'',shift=ofShift?.value||'';let list=db.orders.filter(o=>{let ds=o.deliveries||[];return(!carrier||o.fleteroId===carrier)&&(!date||o.date===date)&&(!user||ds.some(d=>d.user===user))&&(!shift||ds.some(d=>d.shift===shift))});ordersBody.innerHTML=list.map(o=>{let f=db.fleteros.find(x=>x.id===o.fleteroId),ds=o.deliveries||[],tot=ds.reduce((s,d)=>s+d.lines.reduce((a,l)=>a+l.total,0),0),mat=ds.reduce((s,d)=>({p:s.p+d.palletOut-d.palletIn,c:s.c+d.chapOut-d.chapIn}),{p:0,c:0}),last=ds.at(-1)||{};return `<tr><td><b>${o.number}</b></td><td>${o.date}</td><td>${f?.name||''}</td><td>${last.user||''}</td><td>${last.shift||''}</td><td><span class="status ${o.status==='Parcial'?'partial':'done'}">${o.status}</span></td><td>${tot} unidades</td><td>${mat.p} planch. · ${mat.c} chap.</td><td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td></tr>`}).join('')}
-function renderMaterials(){if(!document.getElementById('materialsBody'))return;let carrier=mfCarrier?.value||'',from=mfFrom?.value||'',to=mfTo?.value||'',source=mfSource?.value||'';let list=db.materialMoves.filter(m=>{let d=m.date.slice(0,10);return(!carrier||m.fleteroId===carrier)&&(!from||d>=from)&&(!to||d<=to)&&(!source||m.source===source)});let t=list.reduce((s,m)=>({po:s.po+m.palletOut,pi:s.pi+m.palletIn,co:s.co+m.chapOut,ci:s.ci+m.chapIn}),{po:0,pi:0,co:0,ci:0});materialsTotals.innerHTML=`<div class="summarygrid"><div><span class="muted">Planchadas entregadas</span><b>${t.po}</b></div><div><span class="muted">Planchadas devueltas</span><b>${t.pi}</b></div><div><span class="muted">Resultado planchadas</span><b>${t.po-t.pi}</b></div><div><span class="muted">Chapadur entregado</span><b>${t.co}</b></div><div><span class="muted">Chapadur devuelto</span><b>${t.ci}</b></div><div><span class="muted">Resultado chapadur</span><b>${t.co-t.ci}</b></div></div>`;materialsBody.innerHTML=[...list].reverse().map(m=>{let f=db.fleteros.find(x=>x.id===m.fleteroId);return `<tr><td>${fmtDate(m.date)}</td><td>${f?.name||''}</td><td>${m.ref}</td><td>${m.source}</td><td>${m.palletOut}</td><td>${m.palletIn}</td><td>${m.chapOut}</td><td>${m.chapIn}</td><td>Planchadas: ${m.palletOut-m.palletIn}; Chapadur: ${m.chapOut-m.chapIn}</td></tr>`}).join('')}
+function renderMaterials() {
+  if (!document.getElementById('materialsBody')) return;
+  let carrier = mfCarrier?.value || '', from = mfFrom?.value || '', to = mfTo?.value || '', source = mfSource?.value || '';
+  let list = db.materialMoves.filter(m => {
+    let d = m.date.slice(0, 10);
+    return (!carrier || m.fleteroId === carrier) && (!from || d >= from) && (!to || d <= to) && (!source || m.source === source);
+  });
+  let t = list.reduce((s, m) => ({ po: s.po + m.palletOut, pi: s.pi + m.palletIn, co: s.co + m.chapOut, ci: s.ci + m.chapIn }), { po: 0, pi: 0, co: 0, ci: 0 });
+
+  let cb = {};
+  list.forEach(m => {
+    if (!cb[m.fleteroId]) cb[m.fleteroId] = { po: 0, pi: 0, co: 0, ci: 0 };
+    cb[m.fleteroId].po += m.palletOut;
+    cb[m.fleteroId].pi += m.palletIn;
+    cb[m.fleteroId].co += m.chapOut;
+    cb[m.fleteroId].ci += m.chapIn;
+  });
+  let balancesHtml = `<div class="card tablewrap" style="margin-top:16px;">
+    <h3>Saldos de Fleteros en este período</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Fletero</th>
+          <th style="text-align:center">Planchadas (Sale/Entra)</th>
+          <th style="text-align:center">Saldo Planchadas</th>
+          <th style="text-align:center">Chapadur (Sale/Entra)</th>
+          <th style="text-align:center">Saldo Chapadur</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${Object.entries(cb).map(([fId, b]) => {
+          let f = db.fleteros.find(x => x.id === fId);
+          let pColor = b.po - b.pi > 0 ? '#d32f2f' : (b.po - b.pi < 0 ? '#388e3c' : '');
+          let cColor = b.co - b.ci > 0 ? '#d32f2f' : (b.co - b.ci < 0 ? '#388e3c' : '');
+          return `<tr>
+            <td><b>${f ? f.name : fId}</b></td>
+            <td style="text-align:center">${b.po} / ${b.pi}</td>
+            <td style="text-align:center;color:${pColor}"><b>${b.po - b.pi}</b></td>
+            <td style="text-align:center">${b.co} / ${b.ci}</td>
+            <td style="text-align:center;color:${cColor}"><b>${b.co - b.ci}</b></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+
+  materialsTotals.innerHTML = `<div class="summarygrid"><div><span class="muted">Planchadas entregadas</span><b>${t.po}</b></div><div><span class="muted">Planchadas devueltas</span><b>${t.pi}</b></div><div><span class="muted">Resultado planchadas</span><b>${t.po - t.pi}</b></div><div><span class="muted">Chapadur entregado</span><b>${t.co}</b></div><div><span class="muted">Chapadur devuelto</span><b>${t.ci}</b></div><div><span class="muted">Resultado chapadur</span><b>${t.co - t.ci}</b></div></div>` + (Object.keys(cb).length ? balancesHtml : '');
+  
+  materialsBody.innerHTML = [...list].reverse().map(m => {
+    let f = db.fleteros.find(x => x.id === m.fleteroId);
+    return `<tr><td>${fmtDate(m.date)}</td><td>${f?.name || ''}</td><td>${m.ref}</td><td>${m.source}</td><td>${m.palletOut}</td><td>${m.palletIn}</td><td>${m.chapOut}</td><td>${m.chapIn}</td><td>Planchadas: ${m.palletOut - m.palletIn}; Chapadur: ${m.chapOut - m.chapIn}</td></tr>`
+  }).join('');
+}
 
 function reservedForProduct(productId){
  return db.orders.filter(o=>['Recibida','Carga iniciada','Parcial','Pendiente de control'].includes(o.status)).reduce((sum,o)=>{
@@ -2064,7 +2116,7 @@ v13OpenOrderEditor=function(existingId=''){
     });
   }
   v13ToggleMode();
-  setTimeout(()=>document.getElementById('v14ProductSearch')?.focus(),0);
+  setTimeout(()=>document.getElementById('v13Number')?.focus(),0);
 };
 
 // El guardado de v1.3 sigue utilizándose, con el Estado de Facturación oculto.
