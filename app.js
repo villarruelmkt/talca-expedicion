@@ -1,4 +1,4 @@
-﻿
+
 const firebaseConfig = {
   apiKey: "AIzaSyCeeHUCuY0oGYhIPFeE1fhJk6-_O9eYxVU",
   authDomain: "talca-expedicion.firebaseapp.com",
@@ -276,6 +276,40 @@ function openMovement(type){
  <div class="right"><button class="btn btn-primary" onclick="saveSimpleMovement('${type}')">Guardar</button></div>`);
  addMovementLine()
 }
+function editMovement(id) {
+  let m = db.movements.find(x => x.id === id);
+  if (!m) return;
+  modal(`<div class="headrow"><div><h2>Editar movimiento</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
+  <div class="formgrid"><div><label>Fecha</label><input id="mDate" type="date" class="field" value="${m.date.slice(0,10)}"></div><div class="span2"><label>Referencia / observación</label><input id="mRef" class="field" value="${m.ref}"></div></div>
+  <div class="lineitems"><div class="headrow"><h3>Productos</h3><button class="btn btn-secondary" onclick="addMovementLine()">Agregar</button></div><div id="movementLines"></div></div>
+  <div class="right"><button class="btn btn-primary" onclick="saveEditedMovement('${m.id}')">Guardar cambios</button></div>`);
+  let p = db.products.find(x => x.id === m.productId);
+  let d = document.createElement('div'); d.className = 'line';
+  d.innerHTML = `<div class="prod"><label>Producto</label><select class="mvProd">${productOptions()}</select></div><div><label>Fardos</label><input class="field mvPack" type="number" min="0" value="${Math.floor(m.total/p.pack)}"></div><div><label>Unidades</label><input class="field mvUnit" type="number" min="0" value="${m.total%p.pack}"></div><button class="btn btn-danger" onclick="this.parentElement.remove()">Quitar</button>`;
+  movementLines.appendChild(d);
+  d.querySelector('.mvProd').value = m.productId;
+}
+function saveEditedMovement(id) {
+  let m = db.movements.find(x => x.id === id);
+  if (!m) return;
+  // Revert old stock
+  db.stock[m.productId] = (db.stock[m.productId] || 0) + (m.dir === 'in' ? -m.total : m.total);
+  // Apply new changes
+  let rows = [...document.querySelectorAll('#movementLines .line')];
+  if(rows.length === 0) {
+    db.movements = db.movements.filter(x => x.id !== id);
+  } else {
+    let r = rows[0];
+    let p = db.products.find(x => x.id === r.querySelector('.mvProd').value);
+    let n = normalize(r.querySelector('.mvPack').value, r.querySelector('.mvUnit').value, p);
+    m.date = mDate.value;
+    m.ref = mRef.value;
+    m.productId = p.id;
+    m.total = n.total;
+    db.stock[m.productId] = (db.stock[m.productId] || 0) + (m.dir === 'in' ? m.total : -m.total);
+  }
+  save(); closeModal(); renderMovementsV16();
+}
 function addMovementLine(){let d=document.createElement('div');d.className='line';d.innerHTML=`<div class="prod"><label>Producto</label><select class="mvProd">${productOptions()}</select></div><div><label>Fardos</label><input class="field mvPack" type="number" min="0" value="0"></div><div><label>Unidades</label><input class="field mvUnit" type="number" min="0" value="0"></div><button class="btn btn-danger" onclick="this.parentElement.remove()">Quitar</button>`;movementLines.appendChild(d)}
 function saveSimpleMovement(type){
  let rows=[...document.querySelectorAll('#movementLines .line')],dir=type==='ProducciÃ³n'?'in':'out';
@@ -285,7 +319,7 @@ function saveSimpleMovement(type){
 
 function openTransfer(){
  modal(`<div class="headrow"><div><h2>Transferencia Mendoza / San Juan</h2><div class="muted">Genera movimiento de mercaderÃ­a y de materiales del fletero.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
- <div class="formgrid"><div><label>Provincia</label><select id="tProvince"><option>Mendoza</option><option>San Juan</option></select></div><div><label>OperaciÃ³n</label><select id="tDirection"><option value="out">EnvÃ­o</option><option value="in">RecepciÃ³n</option></select></div><div><label>NÃºmero de remito</label><input id="tRemit" class="field"></div><div><label>Fletero</label><select id="tCarrier">${fleteroOptions()}</select></div><div><label>Planchadas que salen</label><input id="tPalletOut" class="field" type="number" min="0" value="0"></div><div><label>Planchadas que entran</label><input id="tPalletIn" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que sale</label><input id="tChapOut" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que entra</label><input id="tChapIn" class="field" type="number" min="0" value="0"></div></div>
+ <div class="formgrid"><div><label>Provincia</label><select id="tProvince"><option>Mendoza</option><option>San Juan</option></select></div><div><label>OperaciÃ³n</label><select id="tDirection"><option value="out">EnvÃ­o</option><option value="in">RecepciÃ³n</option></select></div><div><label>NÃºmero de remito</label><input id="tRemit" class="field"></div><div><label>Fecha (Llegada/Envío)</label><input id="tDate" class="field" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Fletero</label><select id="tCarrier">${fleteroOptions()}</select></div><div><label>Planchadas que salen</label><input id="tPalletOut" class="field" type="number" min="0" value="0"></div><div><label>Planchadas que entran</label><input id="tPalletIn" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que sale</label><input id="tChapOut" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que entra</label><input id="tChapIn" class="field" type="number" min="0" value="0"></div></div>
  <div class="lineitems"><div class="headrow"><h3>Productos del remito</h3><button class="btn btn-secondary" onclick="addMovementLine()">Agregar</button></div><div id="movementLines"></div></div>
  <div class="right"><button class="btn btn-primary" onclick="saveTransfer()">Guardar transferencia</button></div>`);
  addMovementLine()
@@ -293,7 +327,7 @@ function openTransfer(){
 function saveTransfer(){
  if(!tRemit.value.trim())return alert('El nÃºmero de remito es obligatorio.');
  let type=(tDirection.value==='in'?'RecepciÃ³n desde ':'EnvÃ­o a ')+tProvince.value,ref='Remito '+tRemit.value;
- [...document.querySelectorAll('#movementLines .line')].forEach(r=>{let p=db.products.find(x=>x.id===r.querySelector('.mvProd').value),n=normalize(r.querySelector('.mvPack').value,r.querySelector('.mvUnit').value,p);if(n.total)addStockMove({type,ref,productId:p.id,total:n.total,dir:tDirection.value})});
+ [...document.querySelectorAll('#movementLines .line')].forEach(r=>{let p=db.products.find(x=>x.id===r.querySelector('.mvProd').value),n=normalize(r.querySelector('.mvPack').value,r.querySelector('.mvUnit').value,p);if(n.total){db.stock[p.id]=(db.stock[p.id]||0)+(tDirection.value==='in'?n.total:-n.total);db.movements.push({id:uid('m'),date:tDate.value,type,ref,productId:p.id,total:n.total,dir:tDirection.value,note:'',user:session.user,shift:session.shift});audit('Movimiento',type,ref,`${p.id} ${tDirection.value==='in'?'+':'-'}${n.total}`);}});
  addMaterialMove({fleteroId:tCarrier.value,ref,source:type,palletOut:tPalletOut.value,palletIn:tPalletIn.value,chapOut:tChapOut.value,chapIn:tChapIn.value});
  save();closeModal()
 }
@@ -312,7 +346,7 @@ let selectedEmployeeId='';
 
 function searchEmployees(){
  let q=(document.getElementById('employeeSearchInput')?.value||'').trim().toLowerCase();
- let list=db.employees.filter(e=>e.active).filter(e=>!q||e.legajo.toLowerCase().includes(q)||`${e.name} ${e.surname}`.toLowerCase().includes(q));
+ let list=db.employees.filter(e=>e.active).filter(e=>!q||e.legajo.toLowerCase().includes(q)||`${e.name} ${e.surname}`.toLowerCase().includes(q)).sort((a,b)=>Number(a.legajo)-Number(b.legajo));
  employeeSearchResults.innerHTML=list.slice(0,30).map(e=>`<div class="employee-result ${selectedEmployeeId===e.id?'selected':''}" onclick="selectEmployee('${e.id}')"><b>${e.legajo}</b> Â· ${e.name} ${e.surname}<br><span class="muted">Saldo beneficio: ${e.balance||0} fardos</span></div>`).join('')||'<div class="muted">No se encontraron empleados activos.</div>'
 }
 function selectFirstEmployeeResult(){
@@ -2065,8 +2099,8 @@ v13OpenOrderEditor=function(existingId=''){
   let hasDeliveries=Boolean((o?.deliveries||[]).length),actual=v13ActualTotals(o);
   modal(`<div class="headrow"><div><h2>${o?`Corregir orden ${v14Text(o.number)}`:'Nueva orden de carga'}</h2><div class="muted">${o?'Los cambios conservarÃ¡n el historial anterior.':'Puede quedar como PENDIENTE sin impacto hasta definir su salida.'}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
   <div class="formgrid">
-    <div><label>NÃºmero de orden</label><input id="v13Number" class="field" value="${v14Text(o?.number||'')}"></div>
     <div><label>Fecha</label><input id="v13Date" class="field" type="date" value="${v14Text(o?.date||new Date().toISOString().slice(0,10))}"></div>
+    <div><label>NÃºmero de orden</label><input id="v13Number" class="field" autofocus value="${v14Text(o?.number||'')}"></div>
     <div><label>Estado / afectaciÃ³n</label><select id="v13OrderType" onchange="v13ToggleMode()">${v13TypeOptions(type)}</select></div>
     <input id="v13Billing" type="hidden" value="No aplica">
     <div class="span3 v14-carrier-compact">
@@ -2109,7 +2143,7 @@ v13OpenOrderEditor=function(existingId=''){
   </div></div>
   <div id="v13StockWarning"></div>
   <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button id="v13SaveButton" class="btn btn-primary" onclick="v13SaveOrder()">Guardar orden</button></div>`);
-  (o?.requestLines||[]).forEach(line=>v14AppendConfirmed(line,Number(actual[line.productId]||0)));
+  [...(o?.requestLines||[])].sort((a,b)=>a.productId.localeCompare(b.productId)).forEach(line=>v14AppendConfirmed(line,Number(actual[line.productId]||0)));
   v14RefreshEmpty();
   if(hasDeliveries){
     let select=document.getElementById('v13OrderType');
@@ -2757,7 +2791,8 @@ function renderMovementsV16(){
     <td>${g.neutral?v16FmtFardos(g.neutral):''}</td>
     <td>${v14Text(g.user||'')}</td>
     <td>${v14Text(g.shift||'')}</td>
-  </tr>`).join('')||'<tr><td colspan="8" class="muted">No hay movimientos registrados.</td></tr>';
+    <td class="no-print">${g.key.startsWith('SINGLE|') && (g.type === 'Producción' || g.type.startsWith('Recepción')) ? '<button class="btn btn-secondary" onclick="editMovement(\\'' + g.key.split('|')[1] + '\\')">Corregir</button>' : ''}</td>
+  </tr>`).join('')||'<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
 }
 renderMovementsV11=renderMovementsV16;
 
