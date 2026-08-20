@@ -2779,6 +2779,14 @@ function v16GroupedMovements(){
   return output.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
 }
 
+function renderEditMovementBtn(g) {
+  if (g.key.startsWith('SINGLE|') && (g.type === 'Producción' || g.type.startsWith('Recepción'))) {
+    let id = g.key.split('|')[1];
+    return `<button class="btn btn-secondary" onclick="editMovement('${id}')">Corregir</button>`;
+  }
+  return '';
+}
+
 function renderMovementsV16(){
   let body=document.getElementById('movementsBody');if(!body)return;
   let list=v16GroupedMovements();
@@ -2791,7 +2799,7 @@ function renderMovementsV16(){
     <td>${g.neutral?v16FmtFardos(g.neutral):''}</td>
     <td>${v14Text(g.user||'')}</td>
     <td>${v14Text(g.shift||'')}</td>
-    <td class="no-print">${g.key.startsWith('SINGLE|') && (g.type === 'Producción' || g.type.startsWith('Recepción')) ? "<button class='btn btn-secondary' onclick='editMovement(\\"" + g.key.split('|')[1] + "\\")'>Corregir</button>" : ""}</td>
+    <td class="no-print">${renderEditMovementBtn(g)}</td>
   </tr>`).join('')||'<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
 }
 renderMovementsV11=renderMovementsV16;
