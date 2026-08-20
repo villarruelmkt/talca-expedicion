@@ -10,7 +10,11 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const firestoreDb = firebase.firestore();
-firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
+try {
+  firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
+} catch(e) {
+  console.warn('Sync persistence error:', e);
+}
 const docRef = firestoreDb.collection("talca").doc("data");
 let isFirebaseReady = false;
 const PRODUCT_SEED=[
@@ -151,7 +155,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    if (!navigator.onLine) {
      let t = e.target;
      if (t.tagName === 'BUTTON') {
-       let text = t.innerText.toLowerCase();
+       let text = (t.innerText || t.textContent || '').toLowerCase();
        if (text.includes('guardar') || text.includes('confirmar') || text.includes('generar') || text.includes('despachar')) {
          e.stopPropagation();
          e.preventDefault();
