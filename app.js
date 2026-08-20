@@ -147,6 +147,20 @@ document.addEventListener('DOMContentLoaded',()=>{
    if (banner) banner.classList.add('hidden');
  });
 
+ document.addEventListener('click', (e) => {
+   if (!navigator.onLine) {
+     let t = e.target;
+     if (t.tagName === 'BUTTON') {
+       let text = t.innerText.toLowerCase();
+       if (text.includes('guardar') || text.includes('confirmar') || text.includes('generar') || text.includes('despachar')) {
+         e.stopPropagation();
+         e.preventDefault();
+         alert('Acción bloqueada preventivamente: No tienes conexión a internet. Espera a que desaparezca el cartel rojo para evitar sobreescribir y perder datos de otros usuarios.');
+       }
+     }
+   }
+ }, true);
+
  document.addEventListener('wheel', (e) => {
    if (document.activeElement && document.activeElement.type === 'number') {
      document.activeElement.blur();
