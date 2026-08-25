@@ -1,0 +1,13 @@
+Talca Expedición - Sistema de Gestión
+Copyright (c) 2026. Todos los derechos reservados.
+
+Este software, incluyendo pero no limitado a su código fuente (HTML, CSS, JavaScript), bases de datos, diseño, estructura y algoritmos, es propiedad intelectual exclusiva de su autor.
+
+TÉRMINOS Y CONDICIONES:
+
+1. CONFIDENCIALIDAD: Este código fuente es confidencial y contiene secretos comerciales de su autor.
+2. RESTRICCIONES: Queda estrictamente prohibida la copia, reproducción, ingeniería inversa, modificación, distribución o comercialización total o parcial de este software por cualquier medio, ya sea físico o digital, sin el previo consentimiento expreso y por escrito del autor.
+3. USO AUTORIZADO: El uso de este sistema está limitado a las entidades y dominios explícitamente autorizados por el creador.
+4. RENUNCIA DE GARANTÍAS: Este software se proporciona "tal cual", sin garantías de ningún tipo, expresas o implícitas.
+
+Cualquier uso no autorizado de este código constituirá una violación de las leyes de derechos de autor y será sujeto a las acciones civiles y penales correspondientes bajo las leyes de la República Argentina y convenciones internacionales.

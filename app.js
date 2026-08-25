@@ -1,4 +1,14 @@
+/**
+ * Talca Expedición - Sistema de Gestión
+ * Copyright (c) 2026. Todos los derechos reservados.
+ * 
+ * Este código fuente es confidencial y propiedad exclusiva de su autor.
+ * Queda estrictamente prohibida su copia, reproducción, distribución, 
+ * comercialización, modificación o uso no autorizado, ya sea parcial o total, 
+ * sin el previo consentimiento por escrito.
+ */
 
+// --- MODULE: FIREBASE CONFIGURATION & INIT ---
 const firebaseConfig = {
   apiKey: "AIzaSyCeeHUCuY0oGYhIPFeE1fhJk6-_O9eYxVU",
   authDomain: "talca-expedicion.firebaseapp.com",
@@ -79,6 +89,7 @@ function load(){
  data.products.forEach(p=>{if(data.stock[p.id]===undefined)data.stock[p.id]=0});
  return data
 }
+// --- MODULE: GLOBAL STATE & CORE UTILS ---
 let db=load();
 
 docRef.onSnapshot((doc) => {
@@ -106,6 +117,8 @@ docRef.onSnapshot((doc) => {
 
 let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
 function save(){
+ db.schemaVersion = V16_SCHEMA_VERSION;
+ (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
  if (isFirebaseReady) {
    docRef.set(db).catch(console.error);
@@ -116,7 +129,7 @@ function save(){
  }
 }
 function now(){return new Date().toISOString()}
-function fmtDate(x){return new Date(x).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}
+function fmtDate(x){if(typeof x==='string'&&x.length===10&&x.indexOf('-')===4){let [y,m,d]=x.split('-');return `${d}/${m}/${y}`}return new Date(x).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}
 function uid(p='id'){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function fillLoginUsers(){
  let select=document.getElementById('loginUser');if(!select)return;
@@ -185,7 +198,18 @@ document.addEventListener('DOMContentLoaded',()=>{
  });
 });
 document.querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
-function showPage(id){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('active',x.dataset.page===id));renderAll()}
+function showPage(id){
+  if(id!=='employees'&&typeof currentPrintKind!=='undefined'&&currentPrintKind==='receipt'){
+    currentPrintBody='';
+    currentPrintTitle='';
+    currentPrintKind='report';
+    let p=document.getElementById('printArea');if(p)p.innerHTML='';
+  }
+  document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
+  renderAll();
+}
 function modal(content){
  let dialogEl=document.getElementById('dialog');
  let modalEl=document.getElementById('modal');
@@ -206,10 +230,20 @@ function employeeOptions(){return db.employees.filter(e=>e.active).map(e=>`<opti
 function normalize(packs,units,prod){let total=Number(packs||0)*prod.pack+Number(units||0);return {total,packs:Math.floor(total/prod.pack),units:total%prod.pack}}
 function equivalent(total,prod){return `${Math.floor(total/prod.pack)} fardos${total%prod.pack?' + '+total%prod.pack+' un.':''}`}
 function audit(action,entity,ref,detail=''){db.audit=db.audit||[];db.audit.push({id:uid('a'),date:now(),user:session?.user||'Sistema',action,entity,ref,detail})}
-function addStockMove({type,ref,productId,total,dir,note='',date=null}){db.stock[productId]=(db.stock[productId]||0)+(dir==='in'?total:-total);db.movements.push({id:uid('m'),date:date||now(),type,ref,productId,total,dir,note,user:session.user,shift:session.shift});let p=db.products.find(x=>x.id===productId);audit('Movimiento',type,ref,`${productId} ${dir==='in'?'+':'-'}${p?equivalent(total,p):total}`)}
+// --- MODULE: BUSINESS LOGIC (ORDERS & MOVEMENTS) ---
+function addStockMove({type,ref,productId,total,dir,note='',date=null}){db.stock[productId]=(db.stock[productId]||0)+(dir==='in'?total:-total);db.movements.push({id:uid('m'),date:date||now(),type,ref,productId,total,dir,note,user:session.user,shift:session.shift});let p=db.products.find(x=>x.id===productId);audit('Movimiento',type,ref,`${p?p.name:productId} ${dir==='in'?'+':'-'} ${p?equivalent(total,p):total}`);if(typeof v1EnsureBucket==='function'){v1EnsureBucket(productId).physical=db.stock[productId]||0;}}
 function addMaterialMove({fleteroId,ref,source,palletOut=0,palletIn=0,chapOut=0,chapIn=0,date=null}){db.materialMoves.push({id:uid('mat'),date:date||now(),fleteroId,ref,source,palletOut:+palletOut||0,palletIn:+palletIn||0,chapOut:+chapOut||0,chapIn:+chapIn||0,user:session.user,shift:session.shift})}
 
 function openOrderForm(existingId){
+  if(existingId){
+    let o=db.orders.find(x=>x.id===existingId);
+    if(o&&Array.isArray(o.requestLines))return v13OpenOrderEditor(existingId);
+    if(o&&o.pendingType&&o.pendingType!=='immediate')return openPendingDispatchV11(o);
+    return legacyOpenOrderForm_v1(existingId);
+  }
+  return v13OpenOrderEditor('');
+}
+function legacyOpenOrderForm_v1(existingId){
  let o=existingId?db.orders.find(x=>x.id===existingId):null;
  modal(`<div class="headrow"><div><h2>${o?'Registrar nueva entrega':'Nueva orden de carga'}</h2><div class="muted">El stock se descuenta al confirmar la entrega real.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
  <div class="formgrid">
@@ -262,12 +296,7 @@ function saveOrderDelivery(orderId){
  addMaterialMove({fleteroId:o.fleteroId,ref:num,source:'Orden de carga',palletOut:delivery.palletOut,palletIn:delivery.palletIn,chapOut:delivery.chapOut,chapIn:delivery.chapIn});
  o.deliveries.push(delivery);o.status=delivery.result==='Parcial'?'Parcial':delivery.result;if(delivery.loadStart&&!delivery.loadEnd)o.status='Carga iniciada';if(delivery.loadEnd&&delivery.result==='Completa')o.status='Completa';o.billing=billingStatus.value;if(!orderId){db.orders.push(o);audit('Alta','Orden',o.number,'Orden creada')}else audit('Entrega','Orden',o.number,delivery.result);save();closeModal();showPage('orders')
 }
-function viewOrder(id){
- let o=db.orders.find(x=>x.id===id),f=db.fleteros.find(x=>x.id===o.fleteroId);
- modal(`<div class="headrow"><div><h2>Orden ${o.number}</h2><div class="muted">${f?.name||''} · ${o.date}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
- ${o.deliveries.map((d,i)=>`<div class="card" style="margin-bottom:10px"><b>Entrega ${i+1}</b> · ${fmtDate(d.date)} · ${d.result}<br><span class="muted">Inicio: ${d.loadStart?new Date(d.loadStart).toLocaleString('es-AR'):'No informado'} · Fin: ${d.loadEnd?new Date(d.loadEnd).toLocaleString('es-AR'):'No informado'}</span><br><br>${d.lines.map(l=>{let p=db.products.find(x=>x.id===l.productId),cap=p.pack*p.perCut*p.cuts,full=Math.floor(l.total/cap),rem=l.total%cap,packs=Math.floor(rem/p.pack),units=rem%p.pack;return `<b>${p.name}</b>: ${full} pallet(s) completos · ${packs} fardos · ${units} unidades sueltas`}).join('<br>')}<br><span class="muted">Planchadas: sale ${d.palletOut}, entra ${d.palletIn}. Chapadur: sale ${d.chapOut}, entra ${d.chapIn}.</span></div>`).join('')}
- <div class="right"><button class="btn btn-primary" onclick="closeModal();openOrderForm('${o.id}')">Agregar entrega</button> <button class="btn btn-secondary" onclick="window.print()">Imprimir</button></div>`)
-}
+
 
 function openMovement(type){
  modal(`<div class="headrow"><div><h2>${type}</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
@@ -278,10 +307,32 @@ function openMovement(type){
 }
 function addMovementLine(){let d=document.createElement('div');d.className='line';d.innerHTML=`<div class="prod"><label>Producto</label><select class="mvProd">${productOptions()}</select></div><div><label>Fardos</label><input class="field mvPack" type="number" min="0" value="0"></div><div><label>Unidades</label><input class="field mvUnit" type="number" min="0" value="0"></div><button class="btn btn-danger" onclick="this.parentElement.remove()">Quitar</button>`;movementLines.appendChild(d)}
 function saveSimpleMovement(type){
- let rows=[...document.querySelectorAll('#movementLines .line')],dir=type==='Producción'?'in':'out';
- let dStr=document.getElementById('mDate').value, opDate=dStr?new Date(dStr+'T12:00:00').toISOString():now();
- for(let r of rows){let p=db.products.find(x=>x.id===r.querySelector('.mvProd').value),n=normalize(r.querySelector('.mvPack').value,r.querySelector('.mvUnit').value,p);if(n.total)addStockMove({type,ref:mRef.value||type,productId:p.id,total:n.total,dir,date:opDate})}
- save();closeModal()
+  let rows=[...document.querySelectorAll('#movementLines .line')],has=false;
+  let op = uid(type==='Rebote'?'reb':type==='Derrame'?'der':'op');
+  let mDateEl = document.getElementById('mDate');
+  let dStr=mDateEl?mDateEl.value:null, opDate=dStr?new Date(dStr+'T12:00:00').toISOString():now();
+  let mRefEl = document.getElementById('mRef');
+
+  for(let r of rows){
+    let p=db.products.find(x=>x.id===r.querySelector('.mvProd').value);
+    let n=normalize(r.querySelector('.mvPack').value,r.querySelector('.mvUnit').value,p);
+    if(!n.total)continue;
+    has=true;
+    
+    if(type==='Derrame'){
+      addNeutralMoveV11({type,ref:mRefEl?.value||'Derrame',productId:p.id,total:n.total});
+      db.movements[db.movements.length-1].operationId = op;
+    } else {
+      let dir = (type==='Producción'||type==='Rebote')?'in':'out';
+      addStockMove({type,ref:mRefEl?.value||type,productId:p.id,total:n.total,dir,date:opDate});
+      if(['Rebote','Derrame'].includes(type)) {
+        db.movements[db.movements.length-1].operationId = op;
+      }
+    }
+  }
+  
+  if(!has)return alert('Ingrese al menos una cantidad.');
+  save();closeModal();
 }
 
 function openTransfer(){
@@ -551,7 +602,7 @@ function populateFilters(){if(document.getElementById('ofCarrier')){ofCarrier.in
 function clearOrderFilters(){ofCarrier.value='';ofDate.value='';ofUser.value='';ofShift.value='';renderOrders()}
 function clearMaterialFilters(){mfCarrier.value='';mfFrom.value='';mfTo.value='';mfSource.value='';renderMaterials()}
 function printSection(id,title){document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-target'));let p=document.getElementById(id);p.classList.add('print-target');let rt=p.querySelector('.report-title');if(rt)rt.textContent=title;window.print();p.classList.remove('print-target')}
-function renderOrders(){if(!document.getElementById('ordersBody'))return;let carrier=ofCarrier?.value||'',date=ofDate?.value||'',user=ofUser?.value||'',shift=ofShift?.value||'';let list=db.orders.filter(o=>{let ds=o.deliveries||[];return(!carrier||o.fleteroId===carrier)&&(!date||o.date===date)&&(!user||ds.some(d=>d.user===user))&&(!shift||ds.some(d=>d.shift===shift))});ordersBody.innerHTML=list.map(o=>{let f=db.fleteros.find(x=>x.id===o.fleteroId),ds=o.deliveries||[],tot=ds.reduce((s,d)=>s+d.lines.reduce((a,l)=>a+l.total,0),0),mat=ds.reduce((s,d)=>({p:s.p+d.palletOut-d.palletIn,c:s.c+d.chapOut-d.chapIn}),{p:0,c:0}),last=ds.at(-1)||{};return `<tr><td><b>${o.number}</b></td><td>${o.date}</td><td>${f?.name||''}</td><td>${last.user||''}</td><td>${last.shift||''}</td><td><span class="status ${o.status==='Parcial'?'partial':'done'}">${o.status}</span></td><td>${tot} unidades</td><td>${mat.p} planch. · ${mat.c} chap.</td><td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td></tr>`}).join('')}
+
 function renderMaterials() {
   if (!document.getElementById('materialsBody')) return;
   let carrier = mfCarrier?.value || '', from = mfFrom?.value || '', to = mfTo?.value || '', source = mfSource?.value || '';
@@ -616,16 +667,7 @@ function stockState(p,total){
  let f=Math.floor(total/p.pack),crit=p.criticalStock||0,min=p.minStock||0;
  if(total<0)return ['Negativo','danger'];if(f===0)return ['Sin stock','danger'];if(crit&&f<=crit)return ['Crítico','danger'];if(min&&f<=min)return ['Bajo','partial'];return ['Normal','done']
 }
-function renderPending(){
- if(!document.getElementById('pendingBody'))return;
- let pfCarrier = document.getElementById('pfCarrier'), pfProduct = document.getElementById('pfProduct'), pfStatus = document.getElementById('pfStatus'), pfFrom = document.getElementById('pfFrom'); let fc=pfCarrier?.value||'',fp=pfProduct?.value||'',fs=pfStatus?.value||'',from=pfFrom?.value||'';
- let rows=[];
- db.orders.forEach(o=>{let f=db.fleteros.find(x=>x.id===o.fleteroId),by={};(o.deliveries||[]).forEach(d=>(d.lines||[]).forEach(l=>{let z=by[l.productId]||(by[l.productId]={requested:0,delivered:0});z.requested=Math.max(z.requested,l.requestedTotal||l.total);z.delivered+=l.total||0}));
-   Object.entries(by).forEach(([pid,z])=>{let pend=Math.max(0,z.requested-z.delivered);if(pend>0||o.status==='Completa con cambio')rows.push({o,f,pid,z,pend})})
- });
- rows=rows.filter(r=>(!fc||r.o.fleteroId===fc)&&(!fp||r.pid===fp)&&(!fs||r.o.status===fs)&&(!from||r.o.date>=from));
- pendingBody.innerHTML=rows.map(r=>{let p=db.products.find(x=>x.id===r.pid);return `<tr><td>${r.o.number}</td><td>${r.o.date}</td><td>${r.f?.name||''}</td><td>${p?.name||''}</td><td>${equivalent(r.z.requested,p)}</td><td>${equivalent(r.z.delivered,p)}</td><td><b>${equivalent(r.pend,p)}</b></td><td>${r.o.status}</td><td>${r.o.billing}</td><td class="no-print"><button class="btn btn-secondary" onclick="openOrderForm('${r.o.id}')">Completar</button></td></tr>`}).join('')
-}
+
 function downloadCSV(filename,rows){
  let csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n');
  let a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download=filename;a.click();URL.revokeObjectURL(a.href)
@@ -646,19 +688,31 @@ function generateShiftSummary(){
  setPrintableDocument('Resumen de turno',body);printCurrentDocument()
 }
 
+// --- MODULE: USER INTERFACE (ROUTING & RENDER) ---
 function renderAll(){
  if(!session)return;
  populateFilters();if(document.getElementById('employeeSearchResults')){searchEmployees();if(selectedEmployeeId)renderEmployeeWorkbench();}
  let today=new Date().toISOString().slice(0,10);
- kOpen.textContent=db.orders.filter(o=>o.status==='Abierta'||o.status==='Parcial').length;
- kDeliveries.textContent=db.orders.flatMap(o=>o.deliveries).filter(d=>d.date.slice(0,10)===today).length;
- kAlerts.textContent=db.movements.filter(m=>m.note&&m.date.slice(0,10)===today).length;
- kBilling.textContent=db.orders.filter(o=>o.billing==='Pendiente de aviso').length;
- let recentMoves=[...db.movements].slice(-6).reverse();recent.innerHTML=recentMoves.length?recentMoves.map(m=>{let p=db.products.find(x=>x.id===m.productId);return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${m.type}</b> · ${p?.name||''} · ${m.dir==='in'?'+':'-'}${equivalent(m.total,p)}<br><span class="muted">${fmtDate(m.date)} · ${m.user} · ${m.ref}</span></div>`}).join(''):'<span class="muted">Aún no hay movimientos.</span>';
- renderOrders();
- stockBody.innerHTML=db.products.filter(p=>p.active!==false).map(p=>{let moves=db.movements.filter(m=>m.productId===p.id),last=moves.at(-1),total=db.stock[p.id]||0,fardos=Math.floor(total/p.pack),sueltas=((total%p.pack)+p.pack)%p.pack,res=reservedForProduct(p.id),avail=total-res,state=stockState(p,avail);return `<tr><td>${p.id}</td><td>${p.name}</td><td><b>${fardos}</b></td><td>${sueltas}</td><td>${equivalent(res,p)}</td><td><b>${equivalent(avail,p)}</b></td><td><span class="status ${state[1]}">${state[0]}</span></td><td>${last?last.type+' · '+fmtDate(last.date):'Sin movimientos'}</td></tr>`}).join('');
- movementsBody.innerHTML=[...db.movements].reverse().map(m=>{let p=db.products.find(x=>x.id===m.productId);return `<tr><td>${fmtDate(m.date)}</td><td>${m.type}</td><td>${m.ref}</td><td>${p?.name||''}</td><td>${m.dir==='in'?equivalent(m.total,p):''}</td><td>${m.dir==='out'?equivalent(m.total,p):''}</td><td>${m.user}</td><td>${m.shift}</td></tr>`}).join('');
- renderMaterials();
+ 
+ let kO = document.getElementById('kOpen');
+ if(kO) kO.textContent=(db.orders||[]).filter(o=>o.pendingType==='administrative'||(v13IsOperational(o.pendingType)&&v11OrderOutstanding(o)>0)).length;
+ 
+ let kD = document.getElementById('kDeliveries');
+ if(kD) kD.textContent=(db.orders||[]).flatMap(o=>o.deliveries||[]).filter(d=>d.date.slice(0,10)===today).length;
+ 
+ let kA = document.getElementById('kAlerts');
+ if(kA) kA.textContent=(db.movements||[]).filter(m=>m.note&&m.date.slice(0,10)===today).length;
+ 
+ let kB = document.getElementById('kBilling');
+ if(kB) kB.textContent=(db.orders||[]).filter(o=>o.pendingType==='administrative').length;
+ 
+ if(typeof renderRecentV11 === 'function') renderRecentV11();
+ if(typeof v14RenderProductConfig === 'function') v14RenderProductConfig();
+ if(typeof renderOrdersV16 === 'function') renderOrdersV16();
+ if(typeof renderPendingV13 === 'function') renderPendingV13();
+ if(typeof renderMovementsV16 === 'function') renderMovementsV16();
+ if(typeof renderMaterials === 'function') renderMaterials();
+ if(typeof renderStockV1 === 'function') renderStockV1();
  let legacyEmployeesBody=document.getElementById('employeesBody');
  if(legacyEmployeesBody){
    legacyEmployeesBody.innerHTML=db.employees.map(e=>`<tr><td>${e.legajo}</td><td>${e.name} ${e.surname}</td><td>${e.active?'Activo':'Inactivo'}</td><td><b>${e.balance||0} fardos</b></td><td>${e.lastConsumption?fmtDate(e.lastConsumption):'Sin consumos'}</td></tr>`).join('');
@@ -698,8 +752,7 @@ function v1Migrate(){
 }
 v1Migrate();
 
-const _v1OriginalAddStockMove=addStockMove;
-addStockMove=function(args){_v1OriginalAddStockMove(args);v1EnsureBucket(args.productId).physical=db.stock[args.productId]||0};
+
 
 function v1PendingTotal(b){return ['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias'].reduce((s,k)=>s+Number(b[k]||0),0)}
 function v1Pct(b){let t=v1PendingTotal(b);return t===0?100:(Number(b.physical||0)/t)*100}
@@ -707,19 +760,13 @@ function v1State(b){let t=v1PendingTotal(b);if(t===0)return 'Sin pendientes';ret
 function v1PendingField(label,key,total,p){let n=normalize(0,total,p);return `<div><label>${label}</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input id="${key}Pack" class="field" type="number" min="0" value="${n.packs}" placeholder="Fardos"><input id="${key}Unit" class="field" type="number" min="0" value="${n.units}" placeholder="Unidades"></div></div>`}
 function openPendingEditorV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid);modal(`<div class="headrow"><div><h2>Pendientes · ${p.name}</h2><div class="muted">Ingrese fardos y unidades sueltas.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="formgrid">${v1PendingField('Preventa pendiente','preventa',b.preventa,p)}${v1PendingField('Distri C pendiente','distriC',b.distriC,p)}${v1PendingField('Distri Interior','distriInterior',b.distriInterior,p)}${v1PendingField('Sin codificar','sinCodificar',b.sinCodificar,p)}${v1PendingField('Oeste Mendoza pendiente','oesteMendoza',b.oesteMendoza,p)}${v1PendingField('Oeste Jeremías pendiente','oesteJeremias',b.oesteJeremias,p)}</div><label>Justificación / referencia</label><textarea id="v1PendingNote"></textarea><div class="right"><button class="btn btn-primary" onclick="savePendingV1('${pid}')">Guardar pendientes</button></div>` )}
 function savePendingV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid),before=JSON.parse(JSON.stringify(b));['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias'].forEach(k=>{b[k]=normalize(document.getElementById(k+'Pack').value,document.getElementById(k+'Unit').value,p).total});audit('Modificación','Pendientes',pid,JSON.stringify({before,after:b,note:document.getElementById('v1PendingNote').value}));save();closeModal();renderStockV1()}
-function renderStockV1(){
- if(!document.getElementById('stockBody'))return;let q=(document.getElementById('stockSearchV1')?.value||'').toLowerCase(),f=document.getElementById('stockStateV1')?.value||'';
- let list=(db.products||[]).filter(p=>p.active!==false).filter(p=>!q||p.id.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)).filter(p=>!f||v1State(v1EnsureBucket(p.id))===f);
- stockBody.innerHTML=list.map(p=>{let b=v1EnsureBucket(p.id),t=v1PendingTotal(b),pct=v1Pct(b),state=v1State(b);return `<tr><td><b>${p.id}</b><br>${p.name}</td><td>${equivalent(b.physical,p)}</td><td>${equivalent(b.preventa,p)}</td><td>${equivalent(b.distriC,p)}</td><td>${equivalent(b.distriInterior,p)}</td><td>${equivalent(b.sinCodificar,p)}</td><td>${equivalent(b.oesteMendoza,p)}</td><td>${equivalent(b.oesteJeremias,p)}</td><td><b>${equivalent(t,p)}</b></td><td><span class="status ${state==='Insuficiente'?'danger':state==='Disponible'?'done':'partial'}">${pct.toFixed(1)}%</span><br><span class="muted">${state}</span></td><td class="no-print"><button class="btn btn-secondary" onclick="openPendingEditorV1('${p.id}')">Editar</button></td></tr>`}).join('')
-}
+
 function exportStockV1CSV(){let rows=[['Código','Producto','Stock físico','Preventa','Distri C','Distri Interior','Sin codificar','Oeste Mendoza','Oeste Jeremías','Total pendiente','% disponible']];(db.products||[]).filter(p=>p.active!==false).forEach(p=>{let b=v1EnsureBucket(p.id),t=v1PendingTotal(b);rows.push([p.id,p.name,equivalent(b.physical,p),equivalent(b.preventa,p),equivalent(b.distriC,p),equivalent(b.distriInterior,p),equivalent(b.sinCodificar,p),equivalent(b.oesteMendoza,p),equivalent(b.oesteJeremias,p),equivalent(t,p),v1Pct(b).toFixed(1)+'%'])});downloadCSV('stock_y_pendientes.csv',rows)}
 function exportBackupV1(){let payload={app:'Talca Expedición',schemaVersion:V1_SCHEMA_VERSION,exportedAt:new Date().toISOString(),data:db},a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.download='talca_backup_'+new Date().toISOString().replaceAll(':','-')+'.json';a.click();URL.revokeObjectURL(a.href)}
 function importBackupV1(input){let file=input.files?.[0];if(!file)return;let r=new FileReader();r.onload=()=>{try{let payload=JSON.parse(r.result),data=payload.data||payload;if(!data.products||!data.stock)throw new Error('Formato inválido');v1Backup('Antes de importar respaldo');db=data;v1Migrate();save();alert('Respaldo importado correctamente')}catch(e){alert('No se pudo importar: '+e.message)}};r.readAsText(file)}
 function showBackupManagerV1(){let arr=[];try{arr=JSON.parse(v1SafeGet('talcaExpBackups')||'[]')}catch(e){};modal(`<div class="headrow"><div><h2>Copias de seguridad</h2><div class="muted">La migración a v1.0 crea un respaldo automático.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="toolbar"><button class="btn btn-primary" onclick="exportBackupV1()">Descargar respaldo</button><label class="btn btn-secondary">Importar respaldo<input type="file" accept=".json" hidden onchange="importBackupV1(this)"></label></div><div style="margin-top:16px">${arr.length?arr.slice().reverse().map(b=>`<div class="card" style="margin-bottom:8px"><b>${b.label}</b><br><span class="muted">${fmtDate(b.date)}</span></div>`).join(''):'<span class="muted">No hay respaldos automáticos.</span>'}</div>` )}
 
-const _v1OriginalRenderAll=renderAll;
-renderAll=function(){_v1OriginalRenderAll();renderStockV1()};
-renderAll();
+
 
 
 
@@ -751,8 +798,7 @@ function v11Migrate(){
 }
 v11Migrate();
 
-const _v11Save=save;
-save=function(){db.schemaVersion=V11_SCHEMA_VERSION;(db.products||[]).forEach(p=>v1EnsureBucket(p.id));_v11Save()};
+
 
 function v11IncreasePending(type,productId,total){if(!type||type==='immediate'||!total)return;let b=v1EnsureBucket(productId);b[type]=Number(b[type]||0)+Number(total||0)}
 function v11DecreasePending(type,productId,total){if(!type||type==='immediate'||!total)return 0;let b=v1EnsureBucket(productId),applied=Math.min(Number(b[type]||0),Number(total||0));b[type]=Math.max(0,Number(b[type]||0)-applied);return applied}
@@ -772,34 +818,7 @@ function v11OrderStatus(o){
 }
 function v11ProductSelect(selected=''){return db.products.filter(p=>p.active!==false).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${p.id} · ${p.name}</option>`).join('')}
 
-const _v11LegacyOpenOrderForm=openOrderForm;
-openOrderForm=function(existingId){
- if(existingId){
-   let o=db.orders.find(x=>x.id===existingId);
-   if(o&&o.pendingType&&o.pendingType!=='immediate')return openPendingDispatchV11(o);
-   return _v11LegacyOpenOrderForm(existingId)
- }
- let defaultType=session?.shift==='Tarde'?'preventa':'immediate';
- modal(`<div class="headrow"><div><h2>Nueva orden de carga</h2><div class="muted">Las órdenes pendientes suman lo solicitado; el stock físico se descuenta recién al confirmar la salida.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
- <div class="formgrid">
-  <div><label>Número de orden</label><input id="v11Number" class="field"></div>
-  <div><label>Fecha</label><input id="v11Date" class="field" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
-  <div><label>Fletero</label><select id="v11Carrier">${fleteroOptions()}</select></div>
-  <div><label>Tipo de afectación</label><select id="v11PendingType" onchange="toggleOrderModeV11()">${v11PendingOptions(defaultType)}</select></div>
-  <div class="span2"><label>Observaciones</label><input id="v11Note" class="field"></div>
- </div>
- <div id="v11ModeInfo" class="alert"></div>
- <div class="lineitems"><div class="headrow"><h3>Productos solicitados</h3><button class="btn btn-secondary" onclick="addOrderLine()">Agregar producto</button></div>
- <div class="code-entry"><div><label>Código o nombre</label><input id="quickProductCode" class="field" placeholder="Ej.: 5670" onkeydown="if(event.key==='Enter'){event.preventDefault();addProductByCode()}"></div><button class="btn btn-primary" onclick="addProductByCode()">Agregar</button></div>
- <div id="orderLines" style="margin-top:12px"></div></div>
- <div id="v11ImmediateMaterials" class="summary"><div class="summarygrid">
-  <div><span class="muted">Planchadas sugeridas</span><b id="suggestPallet">0</b></div><div><label>Planchadas que lleva</label><input id="realPalletOut" class="field" type="number" min="0" value="0"></div>
-  <div><label>Planchadas que devuelve</label><input id="realPalletIn" class="field" type="number" min="0" value="0"></div><div><span class="muted">Chapadur sugerido</span><b id="suggestChap">0</b></div>
-  <div><label>Chapadur que lleva</label><input id="realChapOut" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que devuelve</label><input id="realChapIn" class="field" type="number" min="0" value="0"></div>
- </div></div><div id="stockWarning"></div>
- <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button id="v11SaveOrderBtn" class="btn btn-primary" onclick="saveNewOrderV11()">Guardar orden</button></div>`);
- addOrderLine();toggleOrderModeV11()
-};
+
 
 addOrderLine=function(productId=''){
  let box=document.getElementById('orderLines');if(!box)return;
@@ -881,48 +900,25 @@ function savePendingDispatchV11(orderId){
  o.deliveries.push(delivery);if(lines.some(l=>l.productId!==l.sourceProductId))o.billing='Pendiente de aviso';o.status=v11OrderStatus(o);audit('Salida','Orden',o.number,o.status);save();closeModal();showPage('orders')
 }
 
-viewOrder=function(id){
- let o=db.orders.find(x=>x.id===id),f=db.fleteros.find(x=>x.id===o.fleteroId),modern=Array.isArray(o.requestLines),outstanding=modern?v11OrderOutstanding(o):0;
- let requests=modern?`<div class="card v11-request-card"><h3>Solicitud</h3>${o.requestLines.map(l=>{let p=db.products.find(x=>x.id===l.productId);return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p?.name||l.productId}</b>: ${equivalent(l.total,p)} · Resuelto ${equivalent(Math.min(l.total,l.resolvedTotal||0),p)} · <b>Pendiente ${equivalent(v11LineOutstanding(l),p)}</b></div>`}).join('')}</div>`:'';
- let deliveries=(o.deliveries||[]).map((d,i)=>`<div class="card" style="margin-top:10px"><b>Salida ${i+1}</b> · ${fmtDate(d.date)} · ${d.user||''} · Turno ${d.shift||''}<br><br>${(d.lines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId),s=db.products.find(x=>x.id===(l.sourceProductId||l.productId)),change=(l.sourceProductId&&l.sourceProductId!==l.productId)?` <span class="status open">Sustituye a ${s?.name||l.sourceProductId}</span>`:'';return `<b>${p?.name||l.productId}</b>: ${equivalent(l.total,p)}${change}`}).join('<br>')}<br><span class="muted">Planchadas: sale ${d.palletOut||0}, entra ${d.palletIn||0}. Chapadur: sale ${d.chapOut||0}, entra ${d.chapIn||0}.</span></div>`).join('')||'<div class="card" style="margin-top:10px"><span class="muted">Todavía no se confirmó ninguna salida.</span></div>';
- modal(`<div class="headrow"><div><h2>Orden ${o.number}</h2><div class="muted">${f?.name||''} · ${o.date} · ${V11_PENDING_LABELS[o.pendingType||'legacy']||'Operación histórica'}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="summary"><b>Estado: ${modern?v11OrderStatus(o):o.status}</b>${modern&&o.pendingType!=='immediate'?` · Pendiente total: ${outstanding} unidades`:''}${o.billing&&o.billing!=='No aplica'?` · Facturación: ${o.billing}`:''}</div>${requests}${deliveries}<div class="right" style="margin-top:16px">${modern&&o.pendingType!=='immediate'&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openOrderForm('${o.id}')">Confirmar nueva salida</button>`:''}<button class="btn btn-secondary" onclick="window.print()">Imprimir</button></div>`)
-};
 
-function renderOrdersV11(){
- let body=document.getElementById('ordersBody');if(!body)return;let carrier=document.getElementById('ofCarrier')?.value||'',date=document.getElementById('ofDate')?.value||'',user=document.getElementById('ofUser')?.value||'',shift=document.getElementById('ofShift')?.value||'';
- let list=(db.orders||[]).filter(o=>{let ds=o.deliveries||[];return(!carrier||o.fleteroId===carrier)&&(!date||o.date===date)&&(!user||o.createdBy===user||ds.some(d=>d.user===user))&&(!shift||o.createdShift===shift||ds.some(d=>d.shift===shift))});
- body.innerHTML=list.map(o=>{let f=db.fleteros.find(x=>x.id===o.fleteroId),ds=o.deliveries||[],req=Array.isArray(o.requestLines)?v11OrderRequested(o):ds.reduce((s,d)=>s+(d.lines||[]).reduce((a,l)=>a+Number(l.requestedTotal||l.total||0),0),0),del=v11DeliveredTotal(o),mat=ds.reduce((s,d)=>({p:s.p+(+d.palletOut||0)-(+d.palletIn||0),c:s.c+(+d.chapOut||0)-(+d.chapIn||0)}),{p:0,c:0}),last=ds.at(-1)||{},status=Array.isArray(o.requestLines)?v11OrderStatus(o):o.status,type=V11_PENDING_LABELS[o.pendingType||'legacy']||'Histórica';return `<tr><td><b>${o.number}</b></td><td>${o.date}</td><td>${f?.name||''}</td><td>${type}</td><td>${last.user||o.createdBy||''}</td><td>${last.shift||o.createdShift||''}</td><td><span class="status ${status.includes('Pendiente')?'open':status.includes('Parcial')?'partial':'done'}">${status}</span></td><td>${req} unidades</td><td>${del} unidades</td><td>${mat.p} planch. · ${mat.c} chap.</td><td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td></tr>`}).join('')
-}
-function renderPendingV11(){
- let body=document.getElementById('pendingBody');if(!body)return;let carrier=document.getElementById('pfCarrier')?.value||'',product=document.getElementById('pfProduct')?.value||'',from=document.getElementById('pfFrom')?.value||'',statusFilter=document.getElementById('pfStatus')?.value||'';let rows=[];
- (db.orders||[]).filter(o=>Array.isArray(o.requestLines)&&o.pendingType!=='immediate').filter(o=>(!carrier||o.fleteroId===carrier)&&(!from||o.date>=from)&&(!statusFilter||v11OrderStatus(o)===statusFilter)).forEach(o=>{let f=db.fleteros.find(x=>x.id===o.fleteroId);o.requestLines.forEach(l=>{let p=db.products.find(x=>x.id===l.productId),pend=v11LineOutstanding(l);if(pend>0&&(!product||l.productId===product))rows.push(`<tr><td><b>${o.number}</b></td><td>${o.date}</td><td>${f?.name||''}</td><td>${V11_PENDING_LABELS[o.pendingType]}</td><td>${p?.name||l.productId}</td><td>${equivalent(l.total,p)}</td><td>${equivalent(Math.min(l.total,l.resolvedTotal||0),p)}</td><td><b>${equivalent(pend,p)}</b></td><td>${v11OrderStatus(o)}</td><td>${o.billing||'No aplica'}</td><td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td></tr>`)})});body.innerHTML=rows.join('')||'<tr><td colspan="11" class="muted">No hay pendientes con los filtros seleccionados.</td></tr>'
-}
-exportPendingCSV=function(){let rows=[['Orden','Fecha','Fletero','Tipo','Producto','Solicitado','Resuelto','Pendiente','Estado','Facturación']];(db.orders||[]).filter(o=>Array.isArray(o.requestLines)&&o.pendingType!=='immediate').forEach(o=>{let f=db.fleteros.find(x=>x.id===o.fleteroId);o.requestLines.forEach(l=>{let p=db.products.find(x=>x.id===l.productId),pend=v11LineOutstanding(l);if(pend>0)rows.push([o.number,o.date,f?.name||'',V11_PENDING_LABELS[o.pendingType],p?.name||l.productId,equivalent(l.total,p),equivalent(Math.min(l.total,l.resolvedTotal||0),p),equivalent(pend,p),v11OrderStatus(o),o.billing||'No aplica'])})});downloadCSV('pendientes.csv',rows)};
+
+
+
 
 const _v11OriginalOpenMovement=openMovement;
 openMovement=function(type){return _v11OriginalOpenMovement(type)};
-function addNeutralMoveV11({type,ref,productId,total,note=''}){db.movements.push({id:uid('m'),date:now(),type,ref,productId,total,dir:'none',note,user:session.user,shift:session.shift});let p=db.products.find(x=>x.id===productId);audit('Movimiento sin impacto',type,ref,`${productId} ${p?equivalent(total,p):total}`)}
-saveSimpleMovement=function(type){
- let rows=[...document.querySelectorAll('#movementLines .line')],has=false;
- for(let r of rows){let p=db.products.find(x=>x.id===r.querySelector('.mvProd').value),n=normalize(r.querySelector('.mvPack').value,r.querySelector('.mvUnit').value,p);if(!n.total)continue;has=true;if(type==='Derrame')addNeutralMoveV11({type,ref:document.getElementById('mRef').value||'Derrame',productId:p.id,total:n.total});else addStockMove({type,ref:document.getElementById('mRef').value||type,productId:p.id,total:n.total,dir:(type==='Producción'||type==='Rebote')?'in':'out'})}
- if(!has)return alert('Ingrese al menos una cantidad.');save();closeModal()
-};
-function renderMovementsV11(){let body=document.getElementById('movementsBody');if(!body)return;body.innerHTML=[...(db.movements||[])].reverse().map(m=>{let p=db.products.find(x=>x.id===m.productId);return `<tr><td>${fmtDate(m.date)}</td><td>${m.type}</td><td>${m.ref||''}</td><td>${p?.name||''}</td><td>${m.dir==='in'?equivalent(m.total,p):''}</td><td>${m.dir==='out'?equivalent(m.total,p):''}</td><td>${m.dir==='none'?equivalent(m.total,p):''}</td><td>${m.user||''}</td><td>${m.shift||''}</td></tr>`}).join('')}
+function addNeutralMoveV11({type,ref,productId,total,note=''}){db.movements.push({id:uid('m'),date:now(),type,ref,productId,total,dir:'none',note,user:session.user,shift:session.shift});let p=db.products.find(x=>x.id===productId);audit('Movimiento sin impacto',type,ref,`${p?p.name:productId} ${p?equivalent(total,p):total}`)}
+
+
 function renderRecentV11(){let box=document.getElementById('recent');if(!box)return;let ms=[...(db.movements||[])].slice(-6).reverse();box.innerHTML=ms.length?ms.map(m=>{let p=db.products.find(x=>x.id===m.productId),impact=m.dir==='in'?'+':m.dir==='out'?'-':'Sin impacto: ';return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${m.type}</b> · ${p?.name||''} · ${impact}${equivalent(m.total,p)}<br><span class="muted">${fmtDate(m.date)} · ${m.user||''} · ${m.ref||''}</span></div>`}).join(''):'<span class="muted">Aún no hay movimientos.</span>'}
 
-function renderStockV11(){
- let body=document.getElementById('stockBody');if(!body)return;let q=(document.getElementById('stockSearchV1')?.value||'').toLowerCase(),f=document.getElementById('stockStateV1')?.value||'';let list=(db.products||[]).filter(p=>p.active!==false).filter(p=>!q||p.id.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)).filter(p=>!f||v1State(v1EnsureBucket(p.id))===f);
- body.innerHTML=list.map(p=>{let b=v1EnsureBucket(p.id),t=v1PendingTotal(b),state=v1State(b),availability=state==='Sin pendientes'?'<span class="status partial">Sin pendientes</span>':`<span class="status ${state==='Insuficiente'?'danger':'done'}">${v1Pct(b).toFixed(1)}%</span><br><span class="muted">${state}</span>`;return `<tr><td><b>${p.id}</b><br>${p.name}</td><td>${equivalent(b.physical,p)}</td><td>${equivalent(b.preventa,p)}</td><td>${equivalent(b.distriC,p)}</td><td>${equivalent(b.distriInterior,p)}</td><td>${equivalent(b.sinCodificar,p)}</td><td>${equivalent(b.oesteMendoza,p)}</td><td>${equivalent(b.oesteJeremias,p)}</td><td><b>${equivalent(t,p)}</b></td><td>${availability}</td><td class="no-print"><button class="btn btn-secondary" onclick="openPendingEditorV1('${p.id}')">Editar</button></td></tr>`}).join('')
-}
-renderStockV1=renderStockV11;
+
 
 addProduct=function(){let id=prompt('Código del producto:');if(!id)return;if(db.products.some(p=>p.id===id))return alert('Ese código ya existe.');let name=prompt('Nombre del producto:');if(!name)return;let pack=Number(prompt('Unidades por fardo:','6'));if(!pack)return;let perCut=Number(prompt('Fardos por corte:','20'));if(!perCut)return;let cuts=Number(prompt('Cortes por planchada:','4'));if(!cuts)return;let minStock=Number(prompt('Stock mínimo en fardos:','0')||0),criticalStock=Number(prompt('Stock crítico en fardos:','0')||0),employeeBenefit=confirm('Aceptar para habilitar este producto en el beneficio de empleados.');db.products.push({id,name,pack,perCut,cuts,minStock,criticalStock,active:true,employeeBenefit});db.stock[id]=0;db.stockBuckets=db.stockBuckets||{};v1EnsureBucket(id);audit('Alta','Producto',id,name);save()};
 editProduct=function(id){let p=db.products.find(x=>x.id===id);if(!p)return;let ni=prompt('Código alfanumérico:',p.id);if(!ni)return;if(ni!==p.id&&db.products.some(x=>x.id===ni))return alert('Ese código ya existe.');let old=p.id;p.name=prompt('Nombre:',p.name)||p.name;p.pack=Number(prompt('Unidades por fardo:',String(p.pack))||p.pack);p.perCut=Number(prompt('Fardos por corte:',String(p.perCut))||p.perCut);p.cuts=Number(prompt('Cortes por planchada:',String(p.cuts))||p.cuts);p.minStock=Number(prompt('Stock mínimo en fardos:',String(p.minStock||0))||0);p.criticalStock=Number(prompt('Stock crítico en fardos:',String(p.criticalStock||0))||0);p.employeeBenefit=confirm('Aceptar para HABILITAR el producto en el beneficio de empleados. Cancelar para DESHABILITARLO.');p.active=confirm('Aceptar para dejar el producto ACTIVO. Cancelar para marcarlo INACTIVO.');if(ni!==old){p.id=ni;db.stock[ni]=db.stock[old]||0;delete db.stock[old];if(db.stockBuckets?.[old]){db.stockBuckets[ni]=db.stockBuckets[old];delete db.stockBuckets[old]}(db.movements||[]).forEach(m=>{if(m.productId===old)m.productId=ni});(db.orders||[]).forEach(o=>{(o.requestLines||[]).forEach(l=>{if(l.productId===old)l.productId=ni});(o.deliveries||[]).forEach(d=>(d.lines||[]).forEach(l=>{if(l.productId===old)l.productId=ni;if(l.sourceProductId===old)l.sourceProductId=ni}))})}save()};
 function renderProductsConfigV11(){let box=document.getElementById('productsList');if(!box)return;box.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/planchada · Beneficio empleados: <b>${p.employeeBenefit?'Sí':'No'}</b></span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('')}
 
-const _v11PrevRenderAll=renderAll;
-renderAll=function(){_v11PrevRenderAll();renderOrdersV11();renderPendingV11();renderMovementsV11();renderRecentV11();renderStockV11();renderProductsConfigV11();let ko=document.getElementById('kOpen');if(ko)ko.textContent=(db.orders||[]).filter(o=>Array.isArray(o.requestLines)&&o.pendingType!=='immediate'&&v11OrderOutstanding(o)>0).length};
-renderAll();
+
 
 
 // ===== Talca Expedición v1.2: consumo de empleados con múltiples productos =====
@@ -936,12 +932,7 @@ const V12_SCHEMA_VERSION=3;
   }
 })();
 
-const _v12PreviousSave=save;
-save=function(){
-  _v12PreviousSave();
-  db.schemaVersion=V12_SCHEMA_VERSION;
-  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-};
+
 
 function employeeBenefitProductOptionsV12(selected=''){
   return db.products
@@ -1212,12 +1203,7 @@ function v13Migrate(){
 }
 v13Migrate();
 
-const _v13PreviousSave=save;
-save=function(){
-  db.schemaVersion=V13_SCHEMA_VERSION;
-  _v13PreviousSave();
-  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-};
+
 
 v11IncreasePending=function(type,productId,total){
   if(!v13IsOperational(type)||!total)return;
@@ -1438,15 +1424,7 @@ function v13OpenOrderEditor(existingId=''){
   }
   v13ToggleMode();
 }
-const _v13PreviousOpenOrderForm=openOrderForm;
-openOrderForm=function(existingId){
-  if(existingId){
-    let o=db.orders.find(x=>x.id===existingId);
-    if(o&&Array.isArray(o.requestLines))return v13OpenOrderEditor(existingId);
-    return _v13PreviousOpenOrderForm(existingId);
-  }
-  return v13OpenOrderEditor('');
-};
+
 
 function v13MapOutstanding(o){
   let map={};
@@ -1576,58 +1554,11 @@ function v13SaveOrder(){
   save();closeModal();showPage('orders');
 }
 
-viewOrder=function(id){
-  let o=db.orders.find(x=>x.id===id);if(!o)return;
-  let f=v13OrderCarrier(o),modern=Array.isArray(o.requestLines),outstanding=modern?v11OrderOutstanding(o):0;
-  let requests=modern?`<div class="card v11-request-card"><h3>Solicitud</h3>${o.requestLines.map(l=>{let p=db.products.find(x=>x.id===l.productId);return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${v13Esc(p?.name||l.productId)}</b>: ${equivalent(l.total,p)} · Resuelto ${equivalent(Math.min(l.total,l.resolvedTotal||0),p)} · <b>Restante ${equivalent(v11LineOutstanding(l),p)}</b></div>`}).join('')}</div>`:'';
-  let deliveries=(o.deliveries||[]).map((d,i)=>`<div class="card" style="margin-top:10px"><b>Salida ${i+1}</b> · ${fmtDate(d.date)} · ${v13Esc(d.user||'')} · Turno ${v13Esc(d.shift||'')}<br><br>${(d.lines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId),s=db.products.find(x=>x.id===(l.sourceProductId||l.productId)),change=l.sourceProductId&&l.sourceProductId!==l.productId?` <span class="status open">Sustituye a ${v13Esc(s?.name||l.sourceProductId)}</span>`:'';return `<b>${v13Esc(p?.name||l.productId)}</b>: ${equivalent(l.total,p)}${change}`}).join('<br>')}<br><span class="muted">Planchadas: sale ${d.palletOut||0}, entra ${d.palletIn||0}. Chapadur: sale ${d.chapOut||0}, entra ${d.chapIn||0}.</span></div>`).join('')||'<div class="card" style="margin-top:10px"><span class="muted">Todavía no se confirmó ninguna salida.</span></div>';
-  let history=(o.editHistory||[]).slice().reverse().map(h=>`<div class="v13-edit-history"><b>${fmtDate(h.date)} · ${v13Esc(h.user||'')} · Turno ${v13Esc(h.shift||'')}</b><br>${v13Esc(h.reason||'Sin motivo indicado')}</div>`).join('');
-  let status=modern?v11OrderStatus(o):o.status;
-  modal(`<div class="headrow"><div><h2>Orden ${v13Esc(o.number)}</h2><div class="muted">${v13Esc(v13CarrierDisplay(f))} · ${v13Esc(o.date)} · ${v13Esc(V11_PENDING_LABELS[o.pendingType||'legacy']||'Operación histórica')}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
-  <div class="summary"><b>Estado: ${v13Esc(status)}</b>${modern&&v13IsOperational(o.pendingType)?` · Pendiente total: ${outstanding} unidades`:''}${o.billing&&o.billing!=='No aplica'?` · Facturación: ${v13Esc(o.billing)}`:''}<br><span class="muted">${v13Esc(o.note||'Sin observaciones')}</span></div>
-  ${requests}${deliveries}
-  ${history?`<div class="card" style="margin-top:10px"><h3>Historial de correcciones</h3>${history}</div>`:''}
-  <div class="right" style="margin-top:16px">
-    <button class="btn btn-secondary" onclick="closeModal();openOrderForm('${o.id}')">Corregir orden</button>
-    ${modern&&v13IsOperational(o.pendingType)&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openPendingDispatchV11(db.orders.find(x=>x.id==='${o.id}'))">Confirmar salida</button>`:''}
-    <button class="btn btn-secondary" onclick="window.print()">Imprimir</button>
-  </div>`);
-};
 
-function renderOrdersV13(){
-  let body=document.getElementById('ordersBody');if(!body)return;
-  let carrier=document.getElementById('ofCarrier')?.value||'',date=document.getElementById('ofDate')?.value||'',user=document.getElementById('ofUser')?.value||'',shift=document.getElementById('ofShift')?.value||'';
-  let list=(db.orders||[]).filter(o=>{let ds=o.deliveries||[];return(!carrier||o.fleteroId===carrier)&&(!date||o.date===date)&&(!user||o.createdBy===user||ds.some(d=>d.user===user))&&(!shift||o.createdShift===shift||ds.some(d=>d.shift===shift))});
-  body.innerHTML=list.map(o=>{
-    let f=v13OrderCarrier(o),ds=o.deliveries||[];
-    let req=Array.isArray(o.requestLines)?v11OrderRequested(o):0,del=v11DeliveredTotal(o);
-    let mat=ds.reduce((s,d)=>({p:s.p+(+d.palletOut||0)-(+d.palletIn||0),c:s.c+(+d.chapOut||0)-(+d.chapIn||0)}),{p:0,c:0});
-    let last=ds.at(-1)||{},status=Array.isArray(o.requestLines)?v11OrderStatus(o):o.status;
-    let type=V11_PENDING_LABELS[o.pendingType||'legacy']||'Histórica';
-    let cls=status==='PENDIENTE'?'v13-admin-pending':status.includes('Pendiente')?'open':status.includes('Parcial')?'partial':'done';
-    return `<tr><td><b>${v13Esc(o.number)}</b></td><td>${v13Esc(o.date)}</td><td>${v13Esc(v13CarrierDisplay(f))}</td><td>${v13Esc(type)}</td><td>${v13Esc(last.user||o.createdBy||'')}</td><td>${v13Esc(last.shift||o.createdShift||'')}</td><td><span class="status ${cls}">${v13Esc(status)}</span></td><td>${req} unidades</td><td>${del} unidades</td><td>${mat.p} planch. · ${mat.c} chap.</td><td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td></tr>`;
-  }).join('')||'<tr><td colspan="11" class="muted">No hay órdenes registradas.</td></tr>';
-}
-renderOrdersV11=renderOrdersV13;
-renderOrders=renderOrdersV13;
 
-function renderPendingV13(){
-  let body=document.getElementById('pendingBody');if(!body)return;
-  let carrier=document.getElementById('pfCarrier')?.value||'',product=document.getElementById('pfProduct')?.value||'',from=document.getElementById('pfFrom')?.value||'',statusFilter=document.getElementById('pfStatus')?.value||'';
-  let rows=[];
-  (db.orders||[]).filter(o=>Array.isArray(o.requestLines)&&v13IsOperational(o.pendingType))
-    .filter(o=>(!carrier||o.fleteroId===carrier)&&(!from||o.date>=from)&&(!statusFilter||v11OrderStatus(o)===statusFilter))
-    .forEach(o=>{
-      let f=v13OrderCarrier(o);
-      o.requestLines.forEach(l=>{
-        let p=db.products.find(x=>x.id===l.productId),pending=v11LineOutstanding(l);
-        if(pending>0&&(!product||l.productId===product))rows.push(`<tr><td><b>${v13Esc(o.number)}</b></td><td>${v13Esc(o.date)}</td><td>${v13Esc(v13CarrierDisplay(f))}</td><td>${v13Esc(V11_PENDING_LABELS[o.pendingType])}</td><td>${v13Esc(p?.name||l.productId)}</td><td>${equivalent(l.total,p)}</td><td>${equivalent(Math.min(l.total,l.resolvedTotal||0),p)}</td><td><b>${equivalent(pending,p)}</b></td><td>${v13Esc(v11OrderStatus(o))}</td><td>${v13Esc(o.billing||'No aplica')}</td><td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td></tr>`);
-      });
-    });
-  body.innerHTML=rows.join('')||'<tr><td colspan="11" class="muted">No hay pendientes operativos con los filtros seleccionados.</td></tr>';
-}
-renderPendingV11=renderPendingV13;
-renderPending=renderPendingV13;
+
+
+
 
 exportPendingCSV=function(){
   let rows=[['Orden','Fecha','Fletero','Tipo','Producto','Solicitado','Resuelto','Pendiente','Estado','Facturación']];
@@ -1641,14 +1572,7 @@ exportPendingCSV=function(){
   downloadCSV('pendientes_operativos.csv',rows);
 };
 
-const _v13PreviousRenderAll=renderAll;
-renderAll=function(){
-  _v13PreviousRenderAll();
-  renderOrdersV13();renderPendingV13();
-  let k=document.getElementById('kOpen');
-  if(k)k.textContent=(db.orders||[]).filter(o=>o.pendingType==='administrative'||(v13IsOperational(o.pendingType)&&v11OrderOutstanding(o)>0)).length;
-};
-renderAll();
+
 
 document.addEventListener('click',event=>{
   let box=document.getElementById('v13CarrierResults');
@@ -1689,12 +1613,7 @@ function v14Migrate(){
 }
 v14Migrate();
 
-const _v14Save=save;
-save=function(){
-  db.schemaVersion=V14_SCHEMA_VERSION;
-  _v14Save();
-  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-};
+
 
 // Sin codificar deja de ser una afectación posible de las órdenes.
 v13IsOperational=function(type){
@@ -2058,7 +1977,7 @@ v13ToggleMode=function(){
   v13RecalcOrder();
 };
 
-v13OpenOrderEditor=function(existingId=''){
+function v13OpenOrderEditor(existingId=''){
   let o=existingId?db.orders.find(x=>x.id===existingId):null;
   if(o&&!Array.isArray(o.requestLines))return alert('Esta orden pertenece a una versión anterior y todavía no admite edición completa.');
   v13EditingOrderId=o?.id||'';
@@ -2166,7 +2085,7 @@ exportPendingCSV=function(){
   downloadCSV('pendientes_operativos.csv',rows);
 };
 
-viewOrder=function(id){
+function viewOrder(id){
   let o=db.orders.find(x=>x.id===id);if(!o)return;
   let f=v13OrderCarrier(o),modern=Array.isArray(o.requestLines),outstanding=modern?v11OrderOutstanding(o):0;
   let requests=modern?`<div class="card v11-request-card"><h3>Solicitud</h3>${o.requestLines.map(l=>{let p=db.products.find(x=>x.id===l.productId);return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${v14Text(p?.name||l.productId)}</b>: ${equivalent(l.total,p)} · Resuelto ${equivalent(Math.min(l.total,l.resolvedTotal||0),p)} · <b>Restante ${equivalent(v11LineOutstanding(l),p)}</b></div>`}).join('')}</div>`:'';
@@ -2176,8 +2095,8 @@ viewOrder=function(id){
   modal(`<div class="headrow"><div><h2>Orden ${v14Text(o.number)}</h2><div class="muted">${v14Text(v13CarrierDisplay(f))} · ${v14Text(o.date)} · ${v14Text(V11_PENDING_LABELS[o.pendingType||'legacy']||'Operación histórica')}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
   <div class="summary"><b>Estado: ${v14Text(status)}</b>${modern&&v13IsOperational(o.pendingType)?` · Pendiente total: ${outstanding} unidades`:''}<br><span class="muted">${v14Text(o.note||'Sin observaciones')}</span></div>
   ${requests}${deliveries}${history?`<div class="card" style="margin-top:10px"><h3>Historial de correcciones</h3>${history}</div>`:''}
-  <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal();openOrderForm('${o.id}')">Corregir orden</button>${modern&&v13IsOperational(o.pendingType)&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openPendingDispatchV11(db.orders.find(x=>x.id==='${o.id}'))">Confirmar salida</button>`:''}<button class="btn btn-secondary" onclick="window.print()">Imprimir</button></div>`);
-};
+  <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal();openOrderForm('${o.id}')">Corregir orden</button>${modern&&v13IsOperational(o.pendingType)&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openPendingDispatchV11(db.orders.find(x=>x.id==='${o.id}'))">Confirmar salida</button>`:''}<button class="btn btn-secondary" onclick="v16PrintOrder('${o.id}')">Imprimir</button></div>`);
+}
 
 // Resumen del turno centrado en órdenes y productos.
 generateShiftSummary=function(){
@@ -2262,14 +2181,7 @@ savePendingDispatchV11=function(orderId){
 };
 
 // Actualización visual final.
-const _v14RenderAll=renderAll;
-renderAll=function(){
-  _v14RenderAll();
-  let pending=(db.orders||[]).filter(o=>o.pendingType==='administrative').length;
-  let k=document.getElementById('kBilling');if(k)k.textContent=pending;
-  v14RenderProductConfig();renderStockV1();renderPendingV13();
-};
-renderAll();
+
 
 document.addEventListener('click',event=>{
   let box=document.getElementById('v14ProductResults');
@@ -2291,12 +2203,7 @@ const V15_SCHEMA_VERSION=6;
   }
 })();
 
-const _v15Save=save;
-save=function(){
-  db.schemaVersion=V15_SCHEMA_VERSION;
-  _v15Save();
-  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-};
+
 
 function v15FardosEquivalent(total,p){
   if(!p||!Number(p.pack))return 0;
@@ -2411,138 +2318,12 @@ openPendingDispatchV11=function(o){
 };
 
 // ---------- Listado de órdenes: fardos ----------
-function renderOrdersV15(){
-  let body=document.getElementById('ordersBody');if(!body)return;
-  let carrier=document.getElementById('ofCarrier')?.value||'',
-      date=document.getElementById('ofDate')?.value||'',
-      user=document.getElementById('ofUser')?.value||'',
-      shift=document.getElementById('ofShift')?.value||'';
 
-  let list=(db.orders||[]).filter(o=>{
-    let ds=o.deliveries||[];
-    return(!carrier||o.fleteroId===carrier)&&
-          (!date||o.date===date)&&
-          (!user||o.createdBy===user||ds.some(d=>d.user===user))&&
-          (!shift||o.createdShift===shift||ds.some(d=>d.shift===shift));
-  });
 
-  body.innerHTML=list.map(o=>{
-    let f=v13OrderCarrier(o),ds=o.deliveries||[];
-    let req=Array.isArray(o.requestLines)?v15OrderRequestedFardos(o):0;
-    let del=Array.isArray(o.requestLines)?v15OrderDeliveredFardos(o):0;
-    let mat=ds.reduce((s,d)=>({
-      p:s.p+(+d.palletOut||0)-(+d.palletIn||0),
-      c:s.c+(+d.chapOut||0)-(+d.chapIn||0)
-    }),{p:0,c:0});
-    let last=ds.at(-1)||{},
-        status=Array.isArray(o.requestLines)?v11OrderStatus(o):o.status,
-        type=V11_PENDING_LABELS[o.pendingType||'legacy']||'Histórica',
-        cls=status==='PENDIENTE'?'v13-admin-pending':status.includes('Pendiente')?'open':status.includes('Parcial')?'partial':'done';
 
-    return `<tr>
-      <td><b>${v14Text(o.number)}</b></td>
-      <td>${v14Text(o.date)}</td>
-      <td>${v14Text(v13CarrierDisplay(f))}</td>
-      <td>${v14Text(type)}</td>
-      <td>${v14Text(last.user||o.createdBy||'')}</td>
-      <td>${v14Text(last.shift||o.createdShift||'')}</td>
-      <td><span class="status ${cls}">${v14Text(status)}</span></td>
-      <td>${v15FormatFardos(req)}</td>
-      <td>${v15FormatFardos(del)}</td>
-      <td>${mat.p} planch. · ${mat.c} chap.</td>
-      <td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td>
-    </tr>`;
-  }).join('')||'<tr><td colspan="11" class="muted">No hay órdenes registradas.</td></tr>';
-}
-renderOrdersV13=renderOrdersV15;
-renderOrdersV11=renderOrdersV15;
-renderOrders=renderOrdersV15;
-
-// ---------- Stock: fila de totales ----------
-function v15AddFardos(totalObj,key,total,p){
-  totalObj[key]+=v15FardosEquivalent(total,p);
-}
-renderStockV1=function(){
-  if(!document.getElementById('stockBody'))return;
-
-  let q=v14SearchNorm(document.getElementById('stockSearchV1')?.value||''),
-      filter=document.getElementById('stockStateV1')?.value||'';
-
-  let list=(db.products||[])
-    .filter(p=>p.active!==false)
-    .filter(p=>{
-      let hay=v14SearchNorm(`${p.id} ${p.alias||''} ${p.name}`);
-      return !q||hay.includes(q);
-    })
-    .filter(p=>!filter||v1State(v1EnsureBucket(p.id))===filter);
-
-  let totals={
-    physical:0,deliverable:0,preventa:0,distriC:0,distriInterior:0,
-    sinCodificar:0,oesteMendoza:0,oesteJeremias:0,pending:0
-  };
-
-  let rows=list.map(p=>{
-    let b=v1EnsureBucket(p.id),
-        total=v1PendingTotal(b),
-        pct=v1Pct(b),
-        state=v1State(b),
-        deliverable=v14DeliverableStock(b);
-
-    v15AddFardos(totals,'physical',b.physical,p);
-    v15AddFardos(totals,'deliverable',deliverable,p);
-    v15AddFardos(totals,'preventa',b.preventa,p);
-    v15AddFardos(totals,'distriC',b.distriC,p);
-    v15AddFardos(totals,'distriInterior',b.distriInterior,p);
-    v15AddFardos(totals,'sinCodificar',b.sinCodificar,p);
-    v15AddFardos(totals,'oesteMendoza',b.oesteMendoza,p);
-    v15AddFardos(totals,'oesteJeremias',b.oesteJeremias,p);
-    v15AddFardos(totals,'pending',total,p);
-
-    let percentage=total===0
-      ?'<span class="status partial">Sin pendientes</span>'
-      :`<span class="status ${state==='Insuficiente'?'danger':'done'}">${pct.toFixed(1)}%</span><br><span class="muted">${state}</span>`;
-
-    return `<tr>
-      <td><b>${v14Text(p.id)}</b>${p.alias?` · <span class="status partial">${v14Text(p.alias)}</span>`:''}<br>${v14Text(p.name)}</td>
-      <td>${equivalent(b.physical,p)}<br><span class="muted">Entregable: ${equivalent(deliverable,p)}</span></td>
-      <td>${equivalent(b.preventa,p)}</td>
-      <td>${equivalent(b.distriC,p)}</td>
-      <td>${equivalent(b.distriInterior,p)}</td>
-      <td>${equivalent(b.sinCodificar,p)}</td>
-      <td>${equivalent(b.oesteMendoza,p)}</td>
-      <td>${equivalent(b.oesteJeremias,p)}</td>
-      <td><b>${equivalent(total,p)}</b></td>
-      <td>${percentage}</td>
-      <td class="no-print"><button class="btn btn-secondary" onclick="openPendingEditorV1('${p.id}')">Editar pendientes</button></td>
-    </tr>`;
-  }).join('');
-
-  let globalPct=totals.pending===0?null:(totals.deliverable/totals.pending)*100;
-  let totalRow=`<tr class="v15-stock-total">
-    <td>TOTAL</td>
-    <td>${v15FormatFardos(totals.physical)}<br><span class="muted">Entregable: ${v15FormatFardos(totals.deliverable)}</span></td>
-    <td>${v15FormatFardos(totals.preventa)}</td>
-    <td>${v15FormatFardos(totals.distriC)}</td>
-    <td>${v15FormatFardos(totals.distriInterior)}</td>
-    <td>${v15FormatFardos(totals.sinCodificar)}</td>
-    <td>${v15FormatFardos(totals.oesteMendoza)}</td>
-    <td>${v15FormatFardos(totals.oesteJeremias)}</td>
-    <td>${v15FormatFardos(totals.pending)}</td>
-    <td>${globalPct===null?'<span class="status partial">Sin pendientes</span>':`<b>${globalPct.toFixed(1)}%</b><br><span class="muted">Cobertura global</span>`}</td>
-    <td class="no-print"></td>
-  </tr>`;
-
-  stockBody.innerHTML=(rows||'<tr><td colspan="11" class="muted">No hay productos con los filtros seleccionados.</td></tr>')+totalRow;
-};
 
 // Aseguramos que el render general utilice las versiones v1.5.
-const _v15RenderAll=renderAll;
-renderAll=function(){
-  _v15RenderAll();
-  renderOrdersV15();
-  renderStockV1();
-};
-renderAll();
+
 
 
 // ===== Talca Expedición v1.6 =====
@@ -2558,12 +2339,7 @@ let v16LastReceipt=null;
   }
 })();
 
-const _v16Save=save;
-save=function(){
-  db.schemaVersion=V16_SCHEMA_VERSION;
-  _v16Save();
-  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-};
+
 
 // ------------------------------------------------------------------
 // Interfaz adaptativa
@@ -2820,20 +2596,7 @@ function saveEditMovement(id) {
 }
 renderMovementsV11=renderMovementsV16;
 
-// Marcar nuevas operaciones Rebote/Derrame con operationId para agrupación inequívoca.
-const _v16SaveSimpleMovement=saveSimpleMovement;
-saveSimpleMovement=function(type){
-  if(!['Rebote','Derrame'].includes(type))return _v16SaveSimpleMovement(type);
-  let before=(db.movements||[]).length;
-  let result=_v16SaveSimpleMovement(type);
-  let added=(db.movements||[]).slice(before);
-  if(added.length){
-    let op=uid(type==='Rebote'?'reb':'der');
-    added.forEach(m=>m.operationId=op);
-    save();
-  }
-  return result;
-};
+
 
 // Marcar nuevas confirmaciones de orden con operationId.
 const _v16SavePendingDispatch=savePendingDispatchV11;
@@ -2931,15 +2694,7 @@ function v16AttachMaterialKeyboard(sequence,afterId){
 }
 
 
-// Envolver los editores actuales sin alterar su lógica.
-const _v16OpenOrderEditor=v13OpenOrderEditor;
-v13OpenOrderEditor=function(existingId=''){
-  return _v16OpenOrderEditor(existingId);
-};
-const _v16OpenPendingDispatch=openPendingDispatchV11;
-openPendingDispatchV11=function(o){
-  return _v16OpenPendingDispatch(o);
-};
+
 
 // ------------------------------------------------------------------
 // IMPRESIÓN: un único sistema y limpieza del documento previo
@@ -3078,19 +2833,7 @@ function v16PrintOrder(id){
 }
 
 // Sustituir únicamente el botón de impresión del modal actual.
-const _v16ViewOrder=viewOrder;
-viewOrder=function(id){
-  let result=_v16ViewOrder(id);
-  let dialog=document.getElementById('dialog');
-  if(dialog){
-    [...dialog.querySelectorAll('button')].forEach(btn=>{
-      if(btn.textContent.trim()==='Imprimir'){
-        btn.setAttribute('onclick',`v16PrintOrder('${id}')`);
-      }
-    });
-  }
-  return result;
-};
+
 
 // ------------------------------------------------------------------
 // Comprobantes: exactamente una A4, sin encabezado previo
@@ -3160,35 +2903,12 @@ function v16OpenLastReceipt(){
 }
 
 // Evitar que un comprobante viejo reaparezca al imprimir un documento distinto.
-const _v16ShowPage=showPage;
-showPage=function(id){
-  if(id!=='employees'&&currentPrintKind==='receipt'){
-    currentPrintBody='';
-    currentPrintTitle='';
-    currentPrintKind='report';
-    let p=document.getElementById('printArea');if(p)p.innerHTML='';
-  }
-  let result=_v16ShowPage(id);
-  // Asegurar que las funciones v1.6 sean las que redibujan las pantallas.
-  if(id==='orders')renderOrdersV16();
-  if(id==='pending')renderPendingV13();
-  if(id==='movements')renderMovementsV16();
-  if(id==='materials')renderMaterials();
-  return result;
-};
+
 
 // ------------------------------------------------------------------
 // Render final
 // ------------------------------------------------------------------
-const _v16RenderAll=renderAll;
-renderAll=function(){
-  _v16RenderAll();
-  renderOrdersV16();
-  renderPendingV13();
-  renderMovementsV16();
-  renderMaterials();
-};
-renderAll();
+
 
 function openShiftMaterials() {
   let today = new Date().toISOString().slice(0, 10);

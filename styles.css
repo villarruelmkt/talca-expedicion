@@ -1,3 +1,9 @@
+/*
+ * Talca Expedición - Sistema de Gestión
+ * Copyright (c) 2026. Todos los derechos reservados.
+ * 
+ * Este código fuente es confidencial y propiedad exclusiva de su autor.
+ */
 
 :root{
   --bg:#f3f5f9;--panel:#fff;--ink:#172238;--muted:#697386;--line:#d9dfeb;
@@ -448,7 +454,7 @@ table{font-variant-numeric:tabular-nums}
   .v16-material-entry-grid{grid-template-columns:1fr 1fr 1fr}
 }
 @media(max-width:900px){
-  .shell{grid-template-columns:1fr!important;display:flex!important;flex-direction:column!important}
+  .shell, .compact-ui .shell { grid-template-columns: 1fr !important; display: flex !important; flex-direction: column !important; }
   nav{
     display:flex;overflow-x:auto;
     background:var(--brand);
