@@ -5,3 +5,4 @@ talca_backup_*.json
 # Entornos y configuración local
 .agents/
 *.code-workspace
+node_modules/
