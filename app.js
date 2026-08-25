@@ -1,11 +1,12 @@
 /**
  * Talca Expedición - Sistema de Gestión
- * Copyright (c) 2026. Todos los derechos reservados.
+ * Autor: Pablo Villarruel
+ * Copyright (c) 2026 Pablo Villarruel. Todos los derechos reservados.
  * 
- * Este código fuente es confidencial y propiedad exclusiva de su autor.
+ * Este código fuente es confidencial y propiedad exclusiva de su autor (Pablo Villarruel).
  * Queda estrictamente prohibida su copia, reproducción, distribución, 
  * comercialización, modificación o uso no autorizado, ya sea parcial o total, 
- * sin el previo consentimiento por escrito.
+ * sin el previo consentimiento por escrito de Pablo Villarruel.
  */
 
 // --- MODULE: FIREBASE CONFIGURATION & INIT ---
