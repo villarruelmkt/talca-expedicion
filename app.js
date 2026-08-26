@@ -875,7 +875,7 @@ function openPendingDispatchV11(o){
  modal(`<div class="headrow"><div><h2>Confirmar salida · Orden ${o.number}</h2><div class="muted">${f?.name||''} · ${V11_PENDING_LABELS[o.pendingType]} · Solo se descontará lo realmente entregado.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
  <div class="card v11-request-card"><h3>Pedido original</h3>${(o.requestLines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId);return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p?.name||l.productId}</b> · Solicitado ${equivalent(l.total,p)} · <span class="v11-pending-chip">Pendiente ${equivalent(v11LineOutstanding(l),p)}</span></div>`}).join('')}</div>
  <div class="headrow" style="margin-top:16px"><h3>Mercadería realmente entregada</h3><button class="btn btn-secondary" onclick="addPendingDispatchLineV11()">Agregar línea</button></div><div id="v11DispatchLines"></div>
- <div class="summary"><div class="summarygrid"><div><span class="muted">Planchadas sugeridas</span><b id="v11DispatchPalletSuggest">0</b></div><div><label>Planchadas que lleva</label><input id="v11DispatchPalletOut" class="field" type="number" min="0" value="0"></div><div><label>Planchadas que devuelve</label><input id="v11DispatchPalletIn" class="field" type="number" min="0" value="0"></div><div><span class="muted">Chapadur sugerido</span><b id="v11DispatchChapSuggest">0</b></div><div><label>Chapadur que lleva</label><input id="v11DispatchChapOut" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que devuelve</label><input id="v11DispatchChapIn" class="field" type="number" min="0" value="0"></div></div></div>
+ <div class="summary" style="display:none;"><div class="summarygrid"><div><span class="muted">Planchadas sugeridas</span><b id="v11DispatchPalletSuggest">0</b></div><div><label>Planchadas que lleva</label><input id="v11DispatchPalletOut" class="field" type="number" min="0" value="0"></div><div><label>Planchadas que devuelve</label><input id="v11DispatchPalletIn" class="field" type="number" min="0" value="0"></div><div><span class="muted">Chapadur sugerido</span><b id="v11DispatchChapSuggest">0</b></div><div><label>Chapadur que lleva</label><input id="v11DispatchChapOut" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que devuelve</label><input id="v11DispatchChapIn" class="field" type="number" min="0" value="0"></div></div></div>
  <label>Observaciones</label><textarea id="v11DispatchNote"></textarea><div id="v11DispatchWarning"></div>
  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="savePendingDispatchV11('${o.id}')">Confirmar salida</button></div>`);
  (o.requestLines||[]).filter(l=>v11LineOutstanding(l)>0).forEach(l=>addPendingDispatchLineV11(l.productId,l.productId));
@@ -889,7 +889,7 @@ function addPendingDispatchLineV11(source='',actual=''){
 }
 function syncDispatchActualV11(sel){let row=sel.closest('.v11-delivery-row'),actual=row.querySelector('.v11Actual');if(!actual.dataset.touched)actual.value=sel.value}
 function getPendingDispatchLinesV11(){return [...document.querySelectorAll('#v11DispatchLines .v11-delivery-row')].map(r=>{let source=r.querySelector('.v11Source').value,productId=r.querySelector('.v11Actual').value,p=db.products.find(x=>x.id===productId),n=normalize(r.querySelector('.v11DPack').value,r.querySelector('.v11DUnit').value,p);return {sourceProductId:source,productId,total:n.total}}).filter(l=>l.total>0)}
-function recalcPendingDispatchV11(){let lines=getPendingDispatchLinesV11(),occ=0,cuts=0,w=[];lines.forEach(l=>{let p=db.products.find(x=>x.id===l.productId);occ+=l.total/(p.pack*p.perCut*p.cuts);cuts+=Math.ceil(l.total/(p.pack*p.perCut));if(l.total>(db.stock[p.id]||0))w.push(`${p.name}: stock ${equivalent(db.stock[p.id]||0,p)}, entrega ${equivalent(l.total,p)}`)});let ps=document.getElementById('v11DispatchPalletSuggest'),cs=document.getElementById('v11DispatchChapSuggest');if(ps)ps.textContent=Math.ceil(occ);if(cs)cs.textContent=cuts;let po=document.getElementById('v11DispatchPalletOut'),co=document.getElementById('v11DispatchChapOut');if(po&&+po.value===0)po.value=Math.ceil(occ);if(co&&+co.value===0)co.value=cuts;let box=document.getElementById('v11DispatchWarning');if(box)box.innerHTML=w.length?`<div class="alert"><b>Stock insuficiente.</b><br>${w.join('<br>')}<label>Justificación obligatoria</label><textarea id="v11DispatchJustification"></textarea></div>`:''}
+function recalcPendingDispatchV11(){let lines=getPendingDispatchLinesV11(),w=[];lines.forEach(l=>{let p=db.products.find(x=>x.id===l.productId);if(l.total>(db.stock[p.id]||0))w.push(`${p.name}: stock ${equivalent(db.stock[p.id]||0,p)}, entrega ${equivalent(l.total,p)}`)});let box=document.getElementById('v11DispatchWarning');if(box)box.innerHTML=w.length?`<div class="alert"><b>Stock insuficiente.</b><br>${w.join('<br>')}<label>Justificación obligatoria</label><textarea id="v11DispatchJustification"></textarea></div>`:''}
 function savePendingDispatchV11(orderId){
  let o=db.orders.find(x=>x.id===orderId),lines=getPendingDispatchLinesV11();if(!lines.length)return alert('Ingrese al menos una cantidad realmente entregada.');
  let totals={};lines.forEach(l=>totals[l.productId]=(totals[l.productId]||0)+l.total);let shortage=Object.entries(totals).some(([pid,t])=>t>(db.stock[pid]||0)),just='';if(shortage){just=document.getElementById('v11DispatchJustification')?.value.trim()||'';if(!just)return alert('Debe justificar el stock insuficiente.')}
@@ -1530,8 +1530,8 @@ function v13SaveOrder(){
       id:existing?.deliveries?.[0]?.id||uid('d'),date:existing?.deliveries?.[0]?.date||now(),
       correctedAt:existing?now():'',lines:Object.entries(actualMap).filter(([,t])=>t>0).map(([productId,total])=>({sourceProductId:productId,productId,total})),
       result:'Salida inmediata',note,user:session.user,shift:session.shift,
-      palletOut:+document.getElementById('v13PalletOut').value||0,palletIn:+document.getElementById('v13PalletIn').value||0,
-      chapOut:+document.getElementById('v13ChapOut').value||0,chapIn:+document.getElementById('v13ChapIn').value||0
+      palletOut:0,palletIn:0,
+      chapOut:0,chapIn:0
     };
     o.deliveries=[delivery];
     o.status=v11OrderOutstanding(o)>0?'Parcial':'Despachada';
@@ -1677,8 +1677,10 @@ renderStockV1=function(){
     let hay=v14SearchNorm(`${p.id} ${p.alias||''} ${p.name}`);
     return !q||hay.includes(q);
   }).filter(p=>!filter||v1State(v1EnsureBucket(p.id))===filter);
-  stockBody.innerHTML=list.map(p=>{
+  let totals={physical:0,deliverable:0,preventa:0,distriC:0,distriInterior:0,sinCodificar:0,oesteMendoza:0,oesteJeremias:0,pending:0};
+  let rows=list.map(p=>{
     let b=v1EnsureBucket(p.id),total=v1PendingTotal(b),pct=v1Pct(b),state=v1State(b),deliverable=v14DeliverableStock(b);
+    v15AddFardos(totals,'physical',b.physical,p);v15AddFardos(totals,'deliverable',deliverable,p);v15AddFardos(totals,'preventa',b.preventa,p);v15AddFardos(totals,'distriC',b.distriC,p);v15AddFardos(totals,'distriInterior',b.distriInterior,p);v15AddFardos(totals,'sinCodificar',b.sinCodificar,p);v15AddFardos(totals,'oesteMendoza',b.oesteMendoza,p);v15AddFardos(totals,'oesteJeremias',b.oesteJeremias,p);v15AddFardos(totals,'pending',total,p);
     let percentage=total===0
       ?'<span class="status partial">Sin pendientes</span>'
       :`<span class="status ${state==='Insuficiente'?'danger':'done'}">${pct.toFixed(1)}%</span><br><span class="muted">${state}</span>`;
@@ -1691,6 +1693,9 @@ renderStockV1=function(){
       <td class="no-print"><button class="btn btn-secondary" onclick="openPendingEditorV1('${p.id}')">Editar pendientes</button></td>
     </tr>`;
   }).join('');
+  let globalPct=totals.pending===0?null:(totals.deliverable/totals.pending)*100;
+  let totalRow=`<tr class="v15-stock-total" style="background:#f8f9fa;font-weight:bold;border-top:2px solid var(--line);"><td>TOTAL</td><td>${v15FormatFardos(totals.physical)}<br><span class="muted" style="font-weight:normal">Entregable: ${v15FormatFardos(totals.deliverable)}</span></td><td>${v15FormatFardos(totals.preventa)}</td><td>${v15FormatFardos(totals.distriC)}</td><td>${v15FormatFardos(totals.distriInterior)}</td><td>${v15FormatFardos(totals.sinCodificar)}</td><td>${v15FormatFardos(totals.oesteMendoza)}</td><td>${v15FormatFardos(totals.oesteJeremias)}</td><td>${v15FormatFardos(totals.pending)}</td><td>${globalPct===null?'<span class="status partial" style="font-weight:normal">Sin pendientes</span>':`<b>${globalPct.toFixed(1)}%</b><br><span class="muted" style="font-weight:normal">Cobertura global</span>`}</td><td class="no-print"></td></tr>`;
+  stockBody.innerHTML=rows+totalRow;
 };
 exportStockV1CSV=function(){
   let rows=[['Código','Alias','Producto','Stock físico','Stock entregable','Preventa','Distri C','Distri Interior','Sin codificar','Oeste Mendoza','Oeste Jeremías','Total pendiente','% disponible']];
@@ -1880,6 +1885,9 @@ function v14ConfirmedRow(line,actualTotal=0){
 function v14AppendConfirmed(line,actualTotal=0){
   let box=document.getElementById('v14ConfirmedLines');if(!box)return;
   box.insertAdjacentHTML('beforeend',v14ConfirmedRow(line,actualTotal));
+  let rows=Array.from(box.children);
+  rows.sort((a,b)=>(a.dataset.productId||'').localeCompare((b.dataset.productId||''),undefined,{numeric:true,sensitivity:'base'}));
+  rows.forEach(r=>box.appendChild(r));
   v14RefreshEmpty();v13ToggleMode();
 }
 function v14RefreshEmpty(){
@@ -1913,7 +1921,8 @@ function v14ConfirmDraftProduct(){
   document.getElementById('v14ProductSearch').value='';
   document.getElementById('v14DraftPack').value='0';
   document.getElementById('v14DraftUnit').value='0';
-  document.getElementById('v14ProductSearch').focus();
+  let searchInput = document.getElementById('v14ProductSearch');
+  if(searchInput) searchInput.focus();
   v13RecalcOrder();
 }
 function v14SyncConfirmed(input){
@@ -2020,13 +2029,13 @@ function v13OpenOrderEditor(existingId=''){
     <div id="v14EmptyLines" class="v14-empty">Todavía no se agregaron productos.</div>
     <div id="v14ConfirmedLines" class="v14-confirmed-list"></div>
   </div>
-  <div id="v13Materials" class="summary"><div class="summarygrid">
+  <div id="v13Materials" class="summary" style="display:none;"><div class="summarygrid">
     <div><span class="muted">Planchadas sugeridas</span><b id="v13SuggestPallet">0</b></div>
-    <div><label>Planchadas que lleva</label><input id="v13PalletOut" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.palletOut||0)}"></div>
-    <div><label>Planchadas que devuelve</label><input id="v13PalletIn" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.palletIn||0)}"></div>
+    <div><label>Planchadas que lleva</label><input id="v13PalletOut" class="field" type="number" min="0" value="0"></div>
+    <div><label>Planchadas que devuelve</label><input id="v13PalletIn" class="field" type="number" min="0" value="0"></div>
     <div><span class="muted">Chapadur sugerido</span><b id="v13SuggestChap">0</b></div>
-    <div><label>Chapadur que lleva</label><input id="v13ChapOut" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.chapOut||0)}"></div>
-    <div><label>Chapadur que devuelve</label><input id="v13ChapIn" class="field" type="number" min="0" value="${Number(o?.deliveries?.[0]?.chapIn||0)}"></div>
+    <div><label>Chapadur que lleva</label><input id="v13ChapOut" class="field" type="number" min="0" value="0"></div>
+    <div><label>Chapadur que devuelve</label><input id="v13ChapIn" class="field" type="number" min="0" value="0"></div>
   </div></div>
   <div id="v13StockWarning"></div>
   <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button id="v13SaveButton" class="btn btn-primary" onclick="v13SaveOrder()">Guardar orden</button></div>`);
@@ -2158,10 +2167,7 @@ recalcPendingDispatchV11=function(){
   lines.forEach(l=>{totals[l.productId]=(totals[l.productId]||0)+l.total;let p=db.products.find(x=>x.id===l.productId);occ+=l.total/(p.pack*p.perCut*p.cuts);if(l.total)cuts+=Math.ceil(l.total/(p.pack*p.perCut))});
   let blocked=[],shortages=[];
   Object.entries(totals).forEach(([pid,total])=>{let p=db.products.find(x=>x.id===pid),physical=Number(db.stock[pid]||0),deliverable=v14DeliverableStock(v1EnsureBucket(pid));if(total>deliverable&&total<=physical)blocked.push(`${p.name}: entregable ${equivalent(deliverable,p)}, entrega ${equivalent(total,p)}`);else if(total>physical)shortages.push(`${p.name}: stock físico ${equivalent(physical,p)}, entrega ${equivalent(total,p)}`)});
-  let ps=document.getElementById('v11DispatchPalletSuggest'),cs=document.getElementById('v11DispatchChapSuggest');
-  if(ps)ps.textContent=Math.ceil(occ);if(cs)cs.textContent=cuts;
-  let po=document.getElementById('v11DispatchPalletOut'),co=document.getElementById('v11DispatchChapOut');
-  if(po&&Number(po.value||0)===0)po.value=Math.ceil(occ);if(co&&Number(co.value||0)===0)co.value=cuts;
+
   let warning=document.getElementById('v11DispatchWarning');
   if(warning){
     if(blocked.length)warning.innerHTML=`<div class="alert"><b>No se puede confirmar la salida.</b><br>${blocked.join('<br>')}<br><span class="muted">La diferencia corresponde a mercadería sin codificar, no habilitada para entrega.</span></div>`;
