@@ -1693,6 +1693,9 @@ function savePendingV14(pid){
   audit('Modificación','Pendientes',pid,JSON.stringify({before,after:b,note:document.getElementById('v1PendingNote').value}));
   save();closeModal();renderStockV1();
 }
+function v15AddFardos(totals, key, total, p) {
+  totals[key] = (totals[key] || 0) + (Number(total || 0) / p.pack);
+}
 renderStockV1=function(){
   if(!document.getElementById('stockBody'))return;
   let q=v14SearchNorm(document.getElementById('stockSearchV1')?.value||''),filter=document.getElementById('stockStateV1')?.value||'';
