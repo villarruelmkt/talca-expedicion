@@ -93,76 +93,107 @@ function load(){
 // --- MODULE: GLOBAL STATE & CORE UTILS ---
 let db=load();
 
+// --- MODULE: FIREBASE COLLECTIONS SYNC ---
+let lastSyncedDb = {
+  orders: new Map(), movements: new Map(), audit: new Map(), materialMoves: new Map(), counts: new Map()
+};
+function fastHash(obj) { return JSON.stringify(obj); }
+
 docRef.onSnapshot((doc) => {
   if (doc.exists) {
     let cloudDb = doc.data();
-    // Compare timestamps to prevent older cloud data from overwriting newer local data
-    let localLastDate = (db && db.audit && db.audit.length) ? new Date(db.audit[db.audit.length-1].date).getTime() : 0;
-    let cloudLastDate = (cloudDb && cloudDb.audit && cloudDb.audit.length) ? new Date(cloudDb.audit[cloudDb.audit.length-1].date).getTime() : 0;
+    // Stock y configuraciones toman el valor de la nube (última verdad)
+    db.stock = cloudDb.stock || db.stock;
+    db.stockBuckets = cloudDb.stockBuckets || db.stockBuckets;
+    db.products = cloudDb.products || db.products;
+    db.fleteros = cloudDb.fleteros || db.fleteros;
+    db.employees = cloudDb.employees || db.employees;
     
-    if (localLastDate > cloudLastDate) {
-      console.log('Local data is newer. Pushing to cloud to sync...');
-      docRef.set(db).catch(console.error);
-    } else {
-      console.log('Cloud data is newer or equal. Merging arrays intelligently para evitar pérdida de datos.');
-      
-      // Fusión inteligente para evitar sobreescribir datos locales no sincronizados
-      let mergeArrays = (localArr, cloudArr) => {
-         let map = new Map();
-         (cloudArr || []).forEach(item => { if(item.id) map.set(item.id, item); });
-         let addedLocals = 0;
-         (localArr || []).forEach(item => { 
-             if(item.id && !map.has(item.id)) {
-                 map.set(item.id, item);
-                 addedLocals++;
-             }
-         });
-         let merged = Array.from(map.values()).sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
-         return { arr: merged, addedLocals };
-      };
-
-      let mAudit = mergeArrays(db.audit, cloudDb.audit);
-      let mMovements = mergeArrays(db.movements, cloudDb.movements);
-      let mOrders = mergeArrays(db.orders, cloudDb.orders);
-      let mMatMoves = mergeArrays(db.materialMoves, cloudDb.materialMoves);
-      
-      db.audit = mAudit.arr;
-      db.movements = mMovements.arr;
-      db.orders = mOrders.arr;
-      db.materialMoves = mMatMoves.arr;
-      
-      // Stock y configuraciones toman el valor de la nube (última verdad)
-      db.stock = cloudDb.stock || db.stock;
-      db.stockBuckets = cloudDb.stockBuckets || db.stockBuckets;
-      db.products = cloudDb.products || db.products;
-      db.fleteros = cloudDb.fleteros || db.fleteros;
-      db.employees = cloudDb.employees || db.employees;
-      db.counts = cloudDb.counts || db.counts;
-      
-      safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-
-      // Si detectamos elementos locales que no estaban en la nube, re-subimos el estado fusionado
-      if (mAudit.addedLocals > 0 || mMovements.addedLocals > 0 || mOrders.addedLocals > 0 || mMatMoves.addedLocals > 0) {
-          console.log("Se detectaron operaciones locales sin sincronizar. Subiendo fusión a Firebase...");
-          docRef.set(db).catch(console.error);
-      }
-    }
+    safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
   } else {
-    docRef.set(db).catch(console.error);
+    // Si no existe el documento maestro, lo creamos sin los arreglos pesados
+    let clone = { ...db };
+    delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
+    docRef.set(clone).catch(console.error);
   }
   isFirebaseReady = true;
   try { if(typeof fillLoginUsers === 'function') fillLoginUsers(); } catch(e){}
   try { if(typeof renderAll === 'function') renderAll(); } catch(e){}
 });
 
+function setupCollectionListeners() {
+  ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
+    firestoreDb.collection(col).onSnapshot(snap => {
+       let updated = false;
+       snap.docChanges().forEach(change => {
+          if (change.type === 'added' || change.type === 'modified') {
+             let data = change.doc.data();
+             let idx = (db[col]||[]).findIndex(x => x.id === data.id);
+             if (idx >= 0) db[col][idx] = data;
+             else { db[col] = db[col]||[]; db[col].push(data); }
+             lastSyncedDb[col].set(data.id, fastHash(data));
+             updated = true;
+          }
+          if (change.type === 'removed') {
+             let data = change.doc.data();
+             db[col] = (db[col]||[]).filter(x => x.id !== data.id);
+             lastSyncedDb[col].delete(data.id);
+             updated = true;
+          }
+       });
+       if (updated) {
+          if(col !== 'orders') db[col].sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
+          safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+          try{renderAll()}catch(e){}
+       }
+    });
+  });
+}
+setupCollectionListeners();
+
+// Sincronización en background a los 5 segundos (Auto-Migración y Offline Resolver)
+setTimeout(() => {
+   if (isFirebaseReady) {
+      console.log('Iniciando verificación de colecciones en background...');
+      ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
+         (db[col] || []).forEach(item => {
+            if (!item.id) return;
+            let hash = fastHash(item);
+            if (lastSyncedDb[col].get(item.id) !== hash) {
+               firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
+               lastSyncedDb[col].set(item.id, hash);
+            }
+         });
+      });
+   }
+}, 5000);
+
 let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
+
 function save(){
  db.schemaVersion = V16_SCHEMA_VERSION;
  (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+ 
  if (isFirebaseReady) {
-   docRef.set(db).catch(console.error);
+   // Diff & Sync: Solo subimos a colecciones los items modificados o nuevos
+   ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
+      (db[col] || []).forEach(item => {
+         if (!item.id) return;
+         let hash = fastHash(item);
+         if (lastSyncedDb[col].get(item.id) !== hash) {
+            firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
+            lastSyncedDb[col].set(item.id, hash);
+         }
+      });
+   });
+
+   // Documento maestro súper liviano (Libre de límite de 1MB)
+   let clone = { ...db };
+   delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
+   docRef.set(clone).catch(console.error);
  }
+ 
  try{renderAll()}
  catch(err){
    console.error('Error al actualizar la interfaz:',err);
