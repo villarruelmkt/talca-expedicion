@@ -104,9 +104,48 @@ docRef.onSnapshot((doc) => {
       console.log('Local data is newer. Pushing to cloud to sync...');
       docRef.set(db).catch(console.error);
     } else {
-      console.log('Cloud data is newer or equal. Updating local memory.');
-      db = cloudDb;
+      console.log('Cloud data is newer or equal. Merging arrays intelligently para evitar pérdida de datos.');
+      
+      // Fusión inteligente para evitar sobreescribir datos locales no sincronizados
+      let mergeArrays = (localArr, cloudArr) => {
+         let map = new Map();
+         (cloudArr || []).forEach(item => { if(item.id) map.set(item.id, item); });
+         let addedLocals = 0;
+         (localArr || []).forEach(item => { 
+             if(item.id && !map.has(item.id)) {
+                 map.set(item.id, item);
+                 addedLocals++;
+             }
+         });
+         let merged = Array.from(map.values()).sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
+         return { arr: merged, addedLocals };
+      };
+
+      let mAudit = mergeArrays(db.audit, cloudDb.audit);
+      let mMovements = mergeArrays(db.movements, cloudDb.movements);
+      let mOrders = mergeArrays(db.orders, cloudDb.orders);
+      let mMatMoves = mergeArrays(db.materialMoves, cloudDb.materialMoves);
+      
+      db.audit = mAudit.arr;
+      db.movements = mMovements.arr;
+      db.orders = mOrders.arr;
+      db.materialMoves = mMatMoves.arr;
+      
+      // Stock y configuraciones toman el valor de la nube (última verdad)
+      db.stock = cloudDb.stock || db.stock;
+      db.stockBuckets = cloudDb.stockBuckets || db.stockBuckets;
+      db.products = cloudDb.products || db.products;
+      db.fleteros = cloudDb.fleteros || db.fleteros;
+      db.employees = cloudDb.employees || db.employees;
+      db.counts = cloudDb.counts || db.counts;
+      
       safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+
+      // Si detectamos elementos locales que no estaban en la nube, re-subimos el estado fusionado
+      if (mAudit.addedLocals > 0 || mMovements.addedLocals > 0 || mOrders.addedLocals > 0 || mMatMoves.addedLocals > 0) {
+          console.log("Se detectaron operaciones locales sin sincronizar. Subiendo fusión a Firebase...");
+          docRef.set(db).catch(console.error);
+      }
     }
   } else {
     docRef.set(db).catch(console.error);
