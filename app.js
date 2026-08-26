@@ -229,7 +229,30 @@ function productOptions(){return db.products.filter(p=>p.active!==false).map(p=>
 function fleteroOptions(){return db.fleteros.map(f=>`<option value="${f.id}">${f.name}${f.surname?' '+f.surname:''}</option>`).join('')}
 function employeeOptions(){return db.employees.filter(e=>e.active).map(e=>`<option value="${e.id}">${e.legajo} · ${e.name} ${e.surname}</option>`).join('')}
 function normalize(packs,units,prod){let total=Number(packs||0)*prod.pack+Number(units||0);return {total,packs:Math.floor(total/prod.pack),units:total%prod.pack}}
-function equivalent(total,prod){return `${Math.floor(total/prod.pack)} fardos${total%prod.pack?' + '+total%prod.pack+' un.':''}`}
+var v1StockUnit = 'fardos';
+function toggleStockUnit() {
+  v1StockUnit = v1StockUnit === 'fardos' ? 'planchadas' : 'fardos';
+  let btn = document.getElementById('stockUnitToggle');
+  if (btn) btn.innerText = v1StockUnit === 'fardos' ? 'Ver en Planchadas' : 'Ver en Fardos';
+  if(typeof renderStockV1 === 'function') renderStockV1();
+}
+function equivalent(total, prod) {
+  if (typeof v1StockUnit !== 'undefined' && v1StockUnit === 'planchadas') {
+    let perPallet = prod.pack * (prod.perCut || 20) * (prod.cuts || 4);
+    if (perPallet > 0) {
+      let pallets = Math.floor(total / perPallet);
+      let rem = total % perPallet;
+      let fardos = Math.floor(rem / prod.pack);
+      let un = rem % prod.pack;
+      let parts = [];
+      if (pallets > 0) parts.push(`${pallets} pl`);
+      if (fardos > 0) parts.push(`${fardos} fardos`);
+      if (un > 0) parts.push(`${un} un.`);
+      return parts.join(' + ') || '0 fardos';
+    }
+  }
+  return `${Math.floor(total/prod.pack)} fardos${total%prod.pack?' + '+total%prod.pack+' un.':''}`;
+}
 function audit(action,entity,ref,detail=''){db.audit=db.audit||[];db.audit.push({id:uid('a'),date:now(),user:session?.user||'Sistema',action,entity,ref,detail})}
 // --- MODULE: BUSINESS LOGIC (ORDERS & MOVEMENTS) ---
 function addStockMove({type,ref,productId,total,dir,note='',date=null}){db.stock[productId]=(db.stock[productId]||0)+(dir==='in'?total:-total);db.movements.push({id:uid('m'),date:date||now(),type,ref,productId,total,dir,note,user:session.user,shift:session.shift});let p=db.products.find(x=>x.id===productId);audit('Movimiento',type,ref,`${p?p.name:productId} ${dir==='in'?'+':'-'} ${p?equivalent(total,p):total}`);if(typeof v1EnsureBucket==='function'){v1EnsureBucket(productId).physical=db.stock[productId]||0;}}
@@ -756,7 +779,7 @@ v1Migrate();
 
 
 function v1PendingTotal(b){return ['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias'].reduce((s,k)=>s+Number(b[k]||0),0)}
-function v1Pct(b){let t=v1PendingTotal(b);return t===0?100:(Number(b.physical||0)/t)*100}
+function v1Pct(b){let p=Number(b.physical||0),t=v1PendingTotal(b);return p===0?0:((p-t)*100)/p}
 function v1State(b){let t=v1PendingTotal(b);if(t===0)return 'Sin pendientes';return Number(b.physical||0)>=t?'Disponible':'Insuficiente'}
 function v1PendingField(label,key,total,p){let n=normalize(0,total,p);return `<div><label>${label}</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input id="${key}Pack" class="field" type="number" min="0" value="${n.packs}" placeholder="Fardos"><input id="${key}Unit" class="field" type="number" min="0" value="${n.units}" placeholder="Unidades"></div></div>`}
 function openPendingEditorV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid);modal(`<div class="headrow"><div><h2>Pendientes · ${p.name}</h2><div class="muted">Ingrese fardos y unidades sueltas.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="formgrid">${v1PendingField('Preventa pendiente','preventa',b.preventa,p)}${v1PendingField('Distri C pendiente','distriC',b.distriC,p)}${v1PendingField('Distri Interior','distriInterior',b.distriInterior,p)}${v1PendingField('Sin codificar','sinCodificar',b.sinCodificar,p)}${v1PendingField('Oeste Mendoza pendiente','oesteMendoza',b.oesteMendoza,p)}${v1PendingField('Oeste Jeremías pendiente','oesteJeremias',b.oesteJeremias,p)}</div><label>Justificación / referencia</label><textarea id="v1PendingNote"></textarea><div class="right"><button class="btn btn-primary" onclick="savePendingV1('${pid}')">Guardar pendientes</button></div>` )}
@@ -1693,7 +1716,7 @@ renderStockV1=function(){
       <td class="no-print"><button class="btn btn-secondary" onclick="openPendingEditorV1('${p.id}')">Editar pendientes</button></td>
     </tr>`;
   }).join('');
-  let globalPct=totals.pending===0?null:(totals.deliverable/totals.pending)*100;
+  let globalPct=totals.pending===0?null:(totals.physical===0?0:((totals.physical-totals.pending)*100)/totals.physical);
   let totalRow=`<tr class="v15-stock-total" style="background:#f8f9fa;font-weight:bold;border-top:2px solid var(--line);"><td>TOTAL</td><td>${v15FormatFardos(totals.physical)}<br><span class="muted" style="font-weight:normal">Entregable: ${v15FormatFardos(totals.deliverable)}</span></td><td>${v15FormatFardos(totals.preventa)}</td><td>${v15FormatFardos(totals.distriC)}</td><td>${v15FormatFardos(totals.distriInterior)}</td><td>${v15FormatFardos(totals.sinCodificar)}</td><td>${v15FormatFardos(totals.oesteMendoza)}</td><td>${v15FormatFardos(totals.oesteJeremias)}</td><td>${v15FormatFardos(totals.pending)}</td><td>${globalPct===null?'<span class="status partial" style="font-weight:normal">Sin pendientes</span>':`<b>${globalPct.toFixed(1)}%</b><br><span class="muted" style="font-weight:normal">Cobertura global</span>`}</td><td class="no-print"></td></tr>`;
   stockBody.innerHTML=rows+totalRow;
 };
@@ -2221,6 +2244,14 @@ function v15FormatNumber(value,max=2){
   return n.toLocaleString('es-AR',{minimumFractionDigits:Number.isInteger(n)?0:0,maximumFractionDigits:max});
 }
 function v15FormatFardos(value){
+  if (typeof v1StockUnit !== 'undefined' && v1StockUnit === 'planchadas') {
+    let pallets = Math.floor(value / 80);
+    let remFardos = Math.floor(value % 80);
+    let parts = [];
+    if (pallets > 0) parts.push(`${pallets} pl`);
+    if (remFardos > 0 || pallets === 0) parts.push(`${v15FormatNumber(remFardos)} fardos`);
+    return parts.join(' + ');
+  }
   return `${v15FormatNumber(value)} fardos`;
 }
 function v15OrderRequestedFardos(o){
