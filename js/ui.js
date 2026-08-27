@@ -117,7 +117,7 @@ addOrderLine=function(productId=''){
  box.appendChild(d);recalcOrderV11()
 };
 function syncRequestedV11(el){let r=el.closest('.line'),isPack=el.classList.contains('liReqPack'),target=r.querySelector(isPack?'.liPack':'.liUnit');if(!target.dataset.touched)target.value=el.value}
-addProductByCode=function(){let input=document.getElementById('quickProductCode'),q=(input?.value||'').trim().toLowerCase();if(!q)return;let matches=db.products.filter(p=>p.active!==false&&(p.id.toLowerCase()===q||p.name.toLowerCase().includes(q)));if(!matches.length)return alert('No se encontró el producto.');if(matches.length>1)return alert('Hay varias coincidencias; escriba el código exacto.');addOrderLine(matches[0].id);input.value='';input.focus()};
+addProductByCode=function(){let input=document.getElementById('quickProductCode'),q=(input?.value||'').trim().toLowerCase();if(!q)return;let matches=db.products.filter(p=>p.active!==false&&(p.id.toLowerCase()===q||p.name.toLowerCase().includes(q)));if(!matches.length)return toast('No se encontró el producto.', 'error');if(matches.length>1)return toast('Hay varias coincidencias; escriba el código exacto.', 'error');addOrderLine(matches[0].id);input.value='';input.focus()};
 function toggleOrderModeV11(){
  let type=document.getElementById('v11PendingType')?.value,immediate=type==='immediate';
  document.querySelectorAll('.v11-actual').forEach(x=>x.classList.toggle('hidden',!immediate));
@@ -1198,7 +1198,7 @@ function v14ProductSearchKey(event){
   if(event.key!=='Enter')return;
   event.preventDefault();
   let list=v14ProductMatches(event.currentTarget.value);
-  if(!list.length)return alert('No se encontró el producto por código, alias o nombre.');
+  if(!list.length)return toast('No se encontró el producto por código, alias o nombre.', 'error');
   v14ChooseDraftProduct(list[0].id);
 }
 function v14DraftPackKey(event){
