@@ -156,7 +156,7 @@ table{width:100%;border-collapse:collapse}.tablewrap{overflow:auto} th,td{paddin
     margin-top:12px;
     padding:12px;
     border-radius:12px;
-    background:#f4f7fb;
+    background:var(--soft);
     border:1px solid var(--line);
     display:flex;
     justify-content:space-between;
@@ -662,7 +662,6 @@ table{font-variant-numeric:tabular-nums}
 .modal-form label {
     font-weight: 600;
     margin-bottom: 4px;
-    color: #374151;
 }
 .modal-form input, .modal-form select {
     width: 100%;
