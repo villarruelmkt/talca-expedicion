@@ -342,82 +342,46 @@ function addUser(){
  let password=prompt('Clave inicial:');if(!password)return;
  db.users.push({id:uid('u'),displayName,username,password,active:true});audit('Alta','Usuario',username,displayName);save();fillLoginUsers()
 }
-function addFletero(){let name=prompt('Nombre obligatorio del fletero:');if(!name)return;let surname=prompt('Apellido (opcional):')||'',company=prompt('Empresa transportista (opcional):')||'';db.fleteros.push({id:uid('f'),name,surname,company,active:true});audit('Alta','Fletero',name,company);save()}
-function addEmployee(){
- let legajo=prompt('Número de legajo:');if(!legajo)return;
- if(db.employees.some(e=>e.legajo===legajo))return alert('Ese legajo ya existe.');
- let name=prompt('Nombre:');if(!name)return;
- let surname=prompt('Apellido:')||'';
- let balance=Number(prompt('Fardos acumulados iniciales:', '0')||0);
- db.employees.push({id:uid('e'),legajo,name,surname,active:true,balance,lastCredit:''});db.employees.sort((a,b)=>a.legajo.localeCompare(b.legajo));audit('Alta','Empleado',legajo,`${name} ${surname}`);save()
-}
-function addProduct(){
- let id=prompt('Código del producto:');if(!id)return;
- if(db.products.some(p=>p.id===id))return alert('Ese código ya existe.');
- let name=prompt('Nombre del producto:');if(!name)return;
- let pack=Number(prompt('Unidades por fardo:', '6'));if(!pack)return;
- let perCut=Number(prompt('Fardos por corte:', '20'));if(!perCut)return;
- let cuts=Number(prompt('Cortes por pallet:', '4'));if(!cuts)return;
- let minStock=Number(prompt('Stock mínimo en fardos:', '0')||0),criticalStock=Number(prompt('Stock crítico en fardos:', '0')||0);db.products.push({id,name,pack,perCut,cuts,minStock,criticalStock,active:true});db.stock[id]=0;audit('Alta','Producto',id,name);save()
-}
-
-function editUser(id) {
-  let u = db.users.find(x => x.id === id); if(!u) return;
-  modal(`<div class="headrow"><div><h2>Modificar usuario</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
-  <label>Nombre visible:</label><input type="text" id="mUserDisplay" class="field" value="${u.displayName}">
-  <label>Usuario:</label><input type="text" id="mUserUsername" class="field" value="${u.username}">
-  <label>Clave:</label><input type="text" id="mUserPass" class="field" value="${u.password}">
-  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveEditUser('${id}')">Guardar</button></div>`);
-  window.saveEditUser = function(userId) {
-    let un = db.users.find(x => x.id === userId);
-    un.displayName = document.getElementById('mUserDisplay').value.trim();
-    un.username = document.getElementById('mUserUsername').value.trim();
-    un.password = document.getElementById('mUserPass').value.trim();
-    if(!un.displayName || !un.username || !un.password) return alert('Complete todos los campos');
-    save(); fillLoginUsers(); closeModal();
+function addFletero() {
+  modal(`<div class="headrow"><div><h2>Nuevo fletero</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
+  <div class="formgrid">
+    <div style="grid-column:1/-1"><label>Nombre (obligatorio):</label><input type="text" id="mAddFletName" class="field"></div>
+    <div style="grid-column:1/-1"><label>Apellido (opcional):</label><input type="text" id="mAddFletSur" class="field"></div>
+    <div style="grid-column:1/-1"><label>Empresa transportista (opcional):</label><input type="text" id="mAddFletComp" class="field"></div>
+  </div>
+  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveAddFletero()">Guardar</button></div>`);
+  window.saveAddFletero = function() {
+    let name = document.getElementById('mAddFletName').value.trim();
+    let surname = document.getElementById('mAddFletSur').value.trim();
+    let company = document.getElementById('mAddFletComp').value.trim();
+    if(!name) return alert('El nombre es obligatorio');
+    db.fleteros.push({id:uid('f'), name, surname, company, active:true});
+    audit('Alta', 'Fletero', name, company);
+    save(); renderAll(); closeModal();
   };
 }
-function editFletero(id) {
-  let f = db.fleteros.find(x => x.id === id); if(!f) return;
-  modal(`<div class="headrow"><div><h2>Modificar fletero</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
-  <label>Nombre:</label><input type="text" id="mFleteroName" class="field" value="${f.name}">
-  <label>Apellido:</label><input type="text" id="mFleteroSur" class="field" value="${f.surname||''}">
-  <label>Empresa:</label><input type="text" id="mFleteroComp" class="field" value="${f.company||''}">
-  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveEditFletero('${id}')">Guardar</button></div>`);
-  window.saveEditFletero = function(fId) {
-    let fn = db.fleteros.find(x => x.id === fId);
-    let n = document.getElementById('mFleteroName').value.trim();
-    if(!n) return alert('El nombre es obligatorio');
-    fn.name = n;
-    fn.surname = document.getElementById('mFleteroSur').value.trim();
-    fn.company = document.getElementById('mFleteroComp').value.trim();
-    save(); closeModal(); renderAll();
-  };
-}
-function editEmployee(id) {
-  let e = db.employees.find(x => x.id === id); if(!e) return;
-  modal(`<div class="headrow"><div><h2>Modificar empleado</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
-  <label>Legajo:</label><input type="text" id="mEmpLeg" class="field" value="${e.legajo}">
-  <label>Nombre:</label><input type="text" id="mEmpName" class="field" value="${e.name}">
-  <label>Apellido:</label><input type="text" id="mEmpSur" class="field" value="${e.surname||''}">
-  <label>Saldo de beneficio (fardos):</label><input type="number" id="mEmpBal" class="field" value="${e.balance||0}">
-  <label>Estado activo:</label><input type="checkbox" id="mEmpActive" ${e.active ? 'checked' : ''} style="width:20px;height:20px">
-  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveEditEmployee('${id}')">Guardar</button></div>`);
-  window.saveEditEmployee = function(eId) {
-    let en = db.employees.find(x => x.id === eId);
-    let l = document.getElementById('mEmpLeg').value.trim();
-    let n = document.getElementById('mEmpName').value.trim();
-    if(!l || !n) return alert('Legajo y nombre obligatorios');
-    en.legajo = l; en.name = n;
-    en.surname = document.getElementById('mEmpSur').value.trim();
-    en.balance = Number(document.getElementById('mEmpBal').value) || 0;
-    en.active = document.getElementById('mEmpActive').checked;
-    if(!en.active) en.balance = 0;
+function addEmployee() {
+  modal(`<div class="headrow"><div><h2>Nuevo empleado</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
+  <div class="formgrid">
+    <div style="grid-column:1/-1"><label>Número de legajo:</label><input type="text" id="mAddEmpLeg" class="field"></div>
+    <div style="grid-column:1/-1"><label>Nombre:</label><input type="text" id="mAddEmpName" class="field"></div>
+    <div style="grid-column:1/-1"><label>Apellido:</label><input type="text" id="mAddEmpSur" class="field"></div>
+    <div style="grid-column:1/-1"><label>Fardos acumulados iniciales:</label><input type="number" id="mAddEmpBal" class="field" value="0"></div>
+  </div>
+  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveAddEmployee()">Guardar</button></div>`);
+  window.saveAddEmployee = function() {
+    let legajo = document.getElementById('mAddEmpLeg').value.trim();
+    let name = document.getElementById('mAddEmpName').value.trim();
+    if(!legajo || !name) return alert('Legajo y nombre son obligatorios');
+    if(db.employees.some(e=>e.legajo===legajo)) return alert('Ese legajo ya existe.');
+    let surname = document.getElementById('mAddEmpSur').value.trim();
+    let balance = Number(document.getElementById('mAddEmpBal').value) || 0;
+    db.employees.push({id:uid('e'), legajo, name, surname, active:true, balance, lastCredit:''});
     db.employees.sort((a,b)=>a.legajo.localeCompare(b.legajo));
-    save(); closeModal(); renderAll();
+    audit('Alta', 'Empleado', legajo, `${name} ${surname}`);
+    save(); renderAll(); closeModal();
   };
 }
-function editProduct(id){let p=db.products.find(x=>x.id===id);if(!p)return;let ni=prompt('Código alfanumérico:',p.id);if(!ni)return;if(ni!==p.id&&db.products.some(x=>x.id===ni))return alert('Ese código ya existe.');let old=p.id;p.id=ni;p.name=prompt('Nombre:',p.name)||p.name;p.pack=Number(prompt('Unidades por fardo:',String(p.pack))||p.pack);p.perCut=Number(prompt('Fardos por corte:',String(p.perCut))||p.perCut);p.cuts=Number(prompt('Cortes por pallet:',String(p.cuts))||p.cuts);p.minStock=Number(prompt('Stock mínimo en fardos:',String(p.minStock||0))||0);p.criticalStock=Number(prompt('Stock crítico en fardos:',String(p.criticalStock||0))||0);p.active=confirm('Aceptar para dejar el producto ACTIVO. Cancelar para marcarlo INACTIVO.');if(ni!==old){db.stock[ni]=db.stock[old]||0;delete db.stock[old];db.movements.forEach(m=>{if(m.productId===old)m.productId=ni});db.orders.forEach(o=>o.deliveries.forEach(d=>d.lines.forEach(l=>{if(l.productId===old)l.productId=ni})))}save()}
 function populateFilters(){if(document.getElementById('ofCarrier')){ofCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();mfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();if(document.getElementById('pfCarrier'))pfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();if(document.getElementById('pfProduct'))pfProduct.innerHTML='<option value="">Todos</option>'+productOptions()}if(document.getElementById('ofUser'))ofUser.innerHTML='<option value="">Todos</option>'+db.users.map(u=>`<option value="${u.displayName}">${u.displayName}</option>`).join('')}
 function clearOrderFilters(){ofCarrier.value='';ofDate.value='';ofUser.value='';ofShift.value='';renderOrders()}
 function clearMaterialFilters(){mfCarrier.value='';mfFrom.value='';mfTo.value='';mfSource.value='';renderMaterials()}

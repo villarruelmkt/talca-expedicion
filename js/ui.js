@@ -199,8 +199,87 @@ function renderRecentV11(){let box=document.getElementById('recent');if(!box)ret
 
 
 
-addProduct=function(){let id=prompt('Código del producto:');if(!id)return;if(db.products.some(p=>p.id===id))return alert('Ese código ya existe.');let name=prompt('Nombre del producto:');if(!name)return;let pack=Number(prompt('Unidades por fardo:','6'));if(!pack)return;let perCut=Number(prompt('Fardos por corte:','20'));if(!perCut)return;let cuts=Number(prompt('Cortes por pallet:','4'));if(!cuts)return;let minStock=Number(prompt('Stock mínimo en fardos:','0')||0),criticalStock=Number(prompt('Stock crítico en fardos:','0')||0),employeeBenefit=confirm('Aceptar para habilitar este producto en el beneficio de empleados.');db.products.push({id,name,pack,perCut,cuts,minStock,criticalStock,active:true,employeeBenefit});db.stock[id]=0;db.stockBuckets=db.stockBuckets||{};v1EnsureBucket(id);audit('Alta','Producto',id,name);save()};
-editProduct=function(id){let p=db.products.find(x=>x.id===id);if(!p)return;let ni=prompt('Código alfanumérico:',p.id);if(!ni)return;if(ni!==p.id&&db.products.some(x=>x.id===ni))return alert('Ese código ya existe.');let old=p.id;p.name=prompt('Nombre:',p.name)||p.name;p.pack=Number(prompt('Unidades por fardo:',String(p.pack))||p.pack);p.perCut=Number(prompt('Fardos por corte:',String(p.perCut))||p.perCut);p.cuts=Number(prompt('Cortes por pallet:',String(p.cuts))||p.cuts);p.minStock=Number(prompt('Stock mínimo en fardos:',String(p.minStock||0))||0);p.criticalStock=Number(prompt('Stock crítico en fardos:',String(p.criticalStock||0))||0);p.employeeBenefit=confirm('Aceptar para HABILITAR el producto en el beneficio de empleados. Cancelar para DESHABILITARLO.');p.active=confirm('Aceptar para dejar el producto ACTIVO. Cancelar para marcarlo INACTIVO.');if(ni!==old){p.id=ni;db.stock[ni]=db.stock[old]||0;delete db.stock[old];if(db.stockBuckets?.[old]){db.stockBuckets[ni]=db.stockBuckets[old];delete db.stockBuckets[old]}(db.movements||[]).forEach(m=>{if(m.productId===old)m.productId=ni});(db.orders||[]).forEach(o=>{(o.requestLines||[]).forEach(l=>{if(l.productId===old)l.productId=ni});(o.deliveries||[]).forEach(d=>(d.lines||[]).forEach(l=>{if(l.productId===old)l.productId=ni;if(l.sourceProductId===old)l.sourceProductId=ni}))})}save()};
+addProduct = function() {
+  modal(`<div class="headrow"><div><h2>Nuevo producto</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
+  <div class="formgrid">
+    <div><label>Código alfanumérico</label><input type="text" id="mProdId" class="field"></div>
+    <div><label>Alias de búsqueda (opcional)</label><input type="text" id="mProdAlias" class="field"></div>
+    <div style="grid-column:1/-1"><label>Nombre del producto</label><input type="text" id="mProdName" class="field"></div>
+    <div><label>Unidades por fardo</label><input type="number" id="mProdPack" class="field" value="6"></div>
+    <div><label>Fardos por corte</label><input type="number" id="mProdCut" class="field" value="20"></div>
+    <div><label>Cortes por pallet</label><input type="number" id="mProdPallet" class="field" value="4"></div>
+    <div><label>Stock mínimo</label><input type="number" id="mProdMin" class="field" value="0"></div>
+    <div><label>Stock crítico</label><input type="number" id="mProdCrit" class="field" value="0"></div>
+    <div style="grid-column:1/-1; display:flex; align-items:center; gap:8px">
+      <input type="checkbox" id="mProdBenefit" style="width:20px;height:20px"> <label style="margin:0">Habilitar en beneficio de empleados</label>
+    </div>
+  </div>
+  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveAddProduct()">Guardar</button></div>`);
+  window.saveAddProduct = function() {
+    let id = document.getElementById('mProdId').value.trim();
+    if(!id) return alert('Código requerido');
+    if(db.products.some(p=>p.id===id)) return alert('El código ya existe');
+    let name = document.getElementById('mProdName').value.trim();
+    if(!name) return alert('Nombre requerido');
+    let alias = document.getElementById('mProdAlias').value.trim().toUpperCase();
+    if(alias && db.products.some(p=>v14SearchNorm(p.alias)===v14SearchNorm(alias))) return alert('El alias ya existe');
+    let pack = Number(document.getElementById('mProdPack').value) || 6;
+    let perCut = Number(document.getElementById('mProdCut').value) || 20;
+    let cuts = Number(document.getElementById('mProdPallet').value) || 4;
+    let minStock = Number(document.getElementById('mProdMin').value) || 0;
+    let criticalStock = Number(document.getElementById('mProdCrit').value) || 0;
+    let employeeBenefit = document.getElementById('mProdBenefit').checked;
+    db.products.push({id, name, alias, pack, perCut, cuts, minStock, criticalStock, active:true, employeeBenefit});
+    db.stock[id] = 0; v1EnsureBucket(id); audit('Alta', 'Producto', id, name);
+    save(); closeModal(); renderAll();
+  };
+};
+editProduct = function(id) {
+  let p = db.products.find(x => x.id === id); if(!p) return;
+  modal(`<div class="headrow"><div><h2>Modificar producto</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
+  <div class="formgrid">
+    <div><label>Código alfanumérico</label><input type="text" id="mProdId" class="field" value="${p.id}"></div>
+    <div><label>Alias de búsqueda</label><input type="text" id="mProdAlias" class="field" value="${p.alias||''}"></div>
+    <div style="grid-column:1/-1"><label>Nombre del producto</label><input type="text" id="mProdName" class="field" value="${p.name}"></div>
+    <div><label>Unidades por fardo</label><input type="number" id="mProdPack" class="field" value="${p.pack}"></div>
+    <div><label>Fardos por corte</label><input type="number" id="mProdCut" class="field" value="${p.perCut}"></div>
+    <div><label>Cortes por pallet</label><input type="number" id="mProdPallet" class="field" value="${p.cuts}"></div>
+    <div><label>Stock mínimo</label><input type="number" id="mProdMin" class="field" value="${p.minStock||0}"></div>
+    <div><label>Stock crítico</label><input type="number" id="mProdCrit" class="field" value="${p.criticalStock||0}"></div>
+    <div style="grid-column:1/-1; display:flex; align-items:center; gap:8px">
+      <input type="checkbox" id="mProdBenefit" ${p.employeeBenefit?'checked':''} style="width:20px;height:20px"> <label style="margin:0">Habilitar beneficio empleados</label>
+    </div>
+    <div style="grid-column:1/-1; display:flex; align-items:center; gap:8px">
+      <input type="checkbox" id="mProdActive" ${p.active!==false?'checked':''} style="width:20px;height:20px"> <label style="margin:0">Producto ACTIVO</label>
+    </div>
+  </div>
+  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="saveEditProduct('${id}')">Guardar</button></div>`);
+  window.saveEditProduct = function(oldId) {
+    let pObj = db.products.find(x => x.id === oldId);
+    let nid = document.getElementById('mProdId').value.trim();
+    if(!nid) return alert('Código requerido');
+    if(nid !== oldId && db.products.some(x=>x.id===nid)) return alert('Ese código ya existe');
+    let alias = document.getElementById('mProdAlias').value.trim().toUpperCase();
+    pObj.name = document.getElementById('mProdName').value.trim() || pObj.name;
+    pObj.alias = alias;
+    pObj.pack = Number(document.getElementById('mProdPack').value) || pObj.pack;
+    pObj.perCut = Number(document.getElementById('mProdCut').value) || pObj.perCut;
+    pObj.cuts = Number(document.getElementById('mProdPallet').value) || pObj.cuts;
+    pObj.minStock = Number(document.getElementById('mProdMin').value) || 0;
+    pObj.criticalStock = Number(document.getElementById('mProdCrit').value) || 0;
+    pObj.employeeBenefit = document.getElementById('mProdBenefit').checked;
+    pObj.active = document.getElementById('mProdActive').checked;
+    
+    if(nid !== oldId) {
+      pObj.id = nid;
+      db.stock[nid] = db.stock[oldId] || 0; delete db.stock[oldId];
+      if(db.stockBuckets?.[oldId]){db.stockBuckets[nid]=db.stockBuckets[oldId];delete db.stockBuckets[oldId]}
+      (db.movements||[]).forEach(m=>{if(m.productId===oldId)m.productId=nid});
+      (db.orders||[]).forEach(o=>{(o.requestLines||[]).forEach(l=>{if(l.productId===oldId)l.productId=nid});(o.deliveries||[]).forEach(d=>(d.lines||[]).forEach(l=>{if(l.productId===oldId)l.productId=nid;if(l.sourceProductId===oldId)l.sourceProductId=nid}))});
+    }
+    save(); closeModal(); renderAll();
+  };
+};
 function renderProductsConfigV11(){let box=document.getElementById('productsList');if(!box)return;box.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet · Beneficio empleados: <b>${p.employeeBenefit?'Sí':'No'}</b></span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('')}
 
 

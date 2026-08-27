@@ -1,5 +1,6 @@
 # Backups de base de datos
 *.json
+!manifest.json
 talca_backup_*.json
 
 # Entornos y configuración local

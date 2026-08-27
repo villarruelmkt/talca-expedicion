@@ -148,7 +148,7 @@ table{width:100%;border-collapse:collapse}.tablewrap{overflow:auto} th,td{paddin
     padding:10px;
     border:1px solid var(--line);
     border-radius:12px;
-    background:#fafcff
+    background:var(--panel)
   }
   .consumption-summary{
     margin-top:12px;
@@ -183,9 +183,9 @@ table{width:100%;border-collapse:collapse}.tablewrap{overflow:auto} th,td{paddin
   }
   .v13-autocomplete button:hover{background:var(--soft)}
   .v13-autocomplete button:last-child{border-bottom:0}
-  .v13-carrier-box{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafcff}
+  .v13-carrier-box{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--panel)}
   .v13-edit-history{border-left:4px solid var(--gold);padding-left:12px;margin:10px 0}
-  .v13-admin-pending{background:#f1ecff;color:#6042a6}
+  .v13-admin-pending{background:var(--soft);color:#6042a6}
   .v13-order-line{
     display:grid;grid-template-columns:minmax(220px,1.5fr) 110px 110px 110px 110px auto;
     gap:10px;align-items:end;padding:11px;border:1px solid var(--line);
@@ -202,7 +202,7 @@ table{width:100%;border-collapse:collapse}.tablewrap{overflow:auto} th,td{paddin
 
   .v14-carrier-compact{
     display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:10px;align-items:end;
-    padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fafcff
+    padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)
   }
   .v14-carrier-details{
     grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
@@ -230,7 +230,7 @@ table{width:100%;border-collapse:collapse}.tablewrap{overflow:auto} th,td{paddin
   .v14-confirmed-list{display:grid;gap:9px}
   .v14-confirmed-line{
     display:grid;grid-template-columns:minmax(220px,1.5fr) 105px 105px 105px 105px auto;
-    gap:9px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fafcff
+    gap:9px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel)
   }
   .v14-confirmed-line .product-name{align-self:center}
   .v14-confirmed-line .product-name small{display:block;color:var(--muted);margin-top:2px}

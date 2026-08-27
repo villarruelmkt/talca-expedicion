@@ -1,0 +1,9 @@
+{
+  "name": "Talca Expedición Salta",
+  "short_name": "Talca",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#172238",
+  "theme_color": "#19417f",
+  "description": "Sistema de gestión logística de Talca Expedición Salta"
+}
