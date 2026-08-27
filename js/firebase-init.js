@@ -11,7 +11,11 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const firestoreDb = firebase.firestore();
 try {
-  firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
+  if (typeof firebase.firestore.persistentLocalCache === 'function') {
+    firestoreDb.settings({ cache: firebase.firestore.persistentLocalCache() });
+  } else {
+    firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
+  }
 } catch(e) {
   console.warn('Sync persistence error:', e);
 }
