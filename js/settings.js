@@ -183,7 +183,7 @@ function addProduct(){
         <div style="display:flex;gap:10px;">
             <div style="flex:1"><label>Uds/Fardo:</label><input id="i_pk" type="number" class="field" value="6"></div>
             <div style="flex:1"><label>Fardos/Corte:</label><input id="i_pc" type="number" class="field" value="20"></div>
-            <div style="flex:1"><label>Cortes/Planchada:</label><input id="i_c" type="number" class="field" value="4"></div>
+            <div style="flex:1"><label>Cortes/Pallet:</label><input id="i_c" type="number" class="field" value="4"></div>
         </div>
         <div style="display:flex;gap:10px;">
             <div style="flex:1"><label>Stock Mínimo:</label><input id="i_ms" type="number" class="field" value="0"></div>
@@ -224,7 +224,7 @@ function editProduct(id){
         <div style="display:flex;gap:10px;">
             <div style="flex:1"><label>Uds/Fardo:</label><input id="i_pk" type="number" class="field" value="${p.pack}"></div>
             <div style="flex:1"><label>Fardos/Corte:</label><input id="i_pc" type="number" class="field" value="${p.perCut}"></div>
-            <div style="flex:1"><label>Cortes/Planchada:</label><input id="i_c" type="number" class="field" value="${p.cuts}"></div>
+            <div style="flex:1"><label>Cortes/Pallet:</label><input id="i_c" type="number" class="field" value="${p.cuts}"></div>
         </div>
         <div style="display:flex;gap:10px;">
             <div style="flex:1"><label>Stock Mínimo:</label><input id="i_ms" type="number" class="field" value="${p.minStock||0}"></div>
@@ -263,11 +263,26 @@ function editProduct(id){
     };
 }
 
-function resetData(){
-    customConfirm('¿Seguro que desea restablecer la base de datos a su versión Demo? Todos los cambios se perderán.', () => {
-        safeRemove(localStorage,'talcaExpV01');
-        db=clone(DEMO);
-        save(); fillLoginUsers();
-        toast('Datos restablecidos a Demo', 'warning');
-    });
-}
+
+window.toggleTheme = function() {
+  let isDark = document.body.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.body.removeAttribute('data-theme');
+    localStorage.setItem('talcaTheme', 'light');
+    let btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.innerHTML = '🌙 Modo Oscuro';
+  } else {
+    document.body.setAttribute('data-theme', 'dark');
+    localStorage.setItem('talcaTheme', 'dark');
+    let btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.innerHTML = '☀️ Modo Claro';
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (localStorage.getItem('talcaTheme') === 'dark') {
+    document.body.setAttribute('data-theme', 'dark');
+    let btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.innerHTML = '☀️ Modo Claro';
+  }
+});

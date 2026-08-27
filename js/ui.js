@@ -34,7 +34,7 @@ function renderAll(){
  usersList.innerHTML=db.users.map(u=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b><br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`).join('');
  fleterosList.innerHTML=db.fleteros.map(f=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${f.name} ${f.surname||''}</b><br><span class="muted">${f.company||'Sin empresa indicada'}</span><div class="right"><button class="btn btn-secondary" onclick="editFletero('${f.id}')">Modificar</button></div></div>`).join('');
  employeeConfigList.innerHTML=db.employees.map(e=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${e.legajo} · ${e.name} ${e.surname}</b><br><span class="muted">${e.active?'Activo':'Inactivo'} · Saldo beneficio: ${e.balance||0} fardos</span><div class="right"><button class="btn btn-secondary" onclick="editEmployee('${e.id}')">Modificar</button></div></div>`).join('');
- productsList.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/planchada</span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('');
+ productsList.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet</span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('');
 }
 
 // ===== Talca Expedición v1.1: migración, empleados, stock pendiente y backups =====
@@ -51,21 +51,11 @@ function v1EnsureBucket(pid){
   db.stockBuckets[pid]=Object.assign({physical:db.stock[pid]||0,preventa:0,distriC:0,distriInterior:0,sinCodificar:0,oesteMendoza:0,oesteJeremias:0},db.stockBuckets[pid]||{});
   db.stockBuckets[pid].physical=db.stock[pid]||0;return db.stockBuckets[pid]
 }
-function v1Migrate(){
-  let changed=false;
-  if(!db.schemaVersion||db.schemaVersion<V1_SCHEMA_VERSION){v1Backup('Antes de actualizar a v1.0');changed=true}
-  db.schemaVersion=V1_SCHEMA_VERSION;db.stockBuckets=db.stockBuckets||{};
-  (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
-  const legs=new Set((db.employees||[]).map(e=>String(e.legajo)));
-  V1_EMPLOYEE_SEED.forEach(e=>{if(!legs.has(String(e.legajo))){db.employees.push(JSON.parse(JSON.stringify(e)));changed=true}});
-  if(changed){try{localStorage.setItem('talcaExpV02',JSON.stringify(db))}catch(e){}}
-}
-v1Migrate();
 
 
 
 function v1PendingTotal(b){return ['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias'].reduce((s,k)=>s+Number(b[k]||0),0)}
-function v1Pct(b){let p=Number(b.physical||0),t=v1PendingTotal(b);return p===0?0:((p-t)*100)/p}
+function v1Pct(b){let t=v1PendingTotal(b);if(t===0)return null;let d=v14DeliverableStock(b);if(d===0)return -100;return ((d-t)/d)*100}
 function v1State(b){let t=v1PendingTotal(b);if(t===0)return 'Sin pendientes';return Number(b.physical||0)>=t?'Disponible':'Insuficiente'}
 function v1PendingField(label,key,total,p){let n=normalize(0,total,p);return `<div><label>${label}</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input id="${key}Pack" class="field" type="number" min="0" value="${n.packs}" placeholder="Fardos"><input id="${key}Unit" class="field" type="number" min="0" value="${n.units}" placeholder="Unidades"></div></div>`}
 function openPendingEditorV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid);modal(`<div class="headrow"><div><h2>Pendientes · ${p.name}</h2><div class="muted">Ingrese fardos y unidades sueltas.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="formgrid">${v1PendingField('Preventa pendiente','preventa',b.preventa,p)}${v1PendingField('Distri C pendiente','distriC',b.distriC,p)}${v1PendingField('Distri Interior','distriInterior',b.distriInterior,p)}${v1PendingField('Sin codificar','sinCodificar',b.sinCodificar,p)}${v1PendingField('Oeste Mendoza pendiente','oesteMendoza',b.oesteMendoza,p)}${v1PendingField('Oeste Jeremías pendiente','oesteJeremias',b.oesteJeremias,p)}</div><label>Justificación / referencia</label><textarea id="v1PendingNote"></textarea><div class="right"><button class="btn btn-primary" onclick="savePendingV1('${pid}')">Guardar pendientes</button></div>` )}
@@ -73,7 +63,7 @@ function savePendingV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBuck
 
 function exportStockV1CSV(){let rows=[['Código','Producto','Stock físico','Preventa','Distri C','Distri Interior','Sin codificar','Oeste Mendoza','Oeste Jeremías','Total pendiente','% disponible']];(db.products||[]).filter(p=>p.active!==false).forEach(p=>{let b=v1EnsureBucket(p.id),t=v1PendingTotal(b);rows.push([p.id,p.name,equivalent(b.physical,p),equivalent(b.preventa,p),equivalent(b.distriC,p),equivalent(b.distriInterior,p),equivalent(b.sinCodificar,p),equivalent(b.oesteMendoza,p),equivalent(b.oesteJeremias,p),equivalent(t,p),v1Pct(b).toFixed(1)+'%'])});downloadCSV('stock_y_pendientes.csv',rows)}
 function exportBackupV1(){let payload={app:'Talca Expedición',schemaVersion:V1_SCHEMA_VERSION,exportedAt:new Date().toISOString(),data:db},a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.download='talca_backup_'+new Date().toISOString().replaceAll(':','-')+'.json';a.click();URL.revokeObjectURL(a.href)}
-function importBackupV1(input){let file=input.files?.[0];if(!file)return;let r=new FileReader();r.onload=()=>{try{let payload=JSON.parse(r.result),data=payload.data||payload;if(!data.products||!data.stock)throw new Error('Formato inválido');v1Backup('Antes de importar respaldo');db=data;v1Migrate();save();toast('Respaldo importado correctamente', 'error')}catch(e){toast('No se pudo importar: '+e.message, 'error')}};r.readAsText(file)}
+function importBackupV1(input){let file=input.files?.[0];if(!file)return;let r=new FileReader();r.onload=()=>{try{let payload=JSON.parse(r.result),data=payload.data||payload;if(!data.products||!data.stock)throw new Error('Formato inválido');v1Backup('Antes de importar respaldo');db=data;v1Migrate();save();alert('Respaldo importado correctamente')}catch(e){alert('No se pudo importar: '+e.message)}};r.readAsText(file)}
 function showBackupManagerV1(){let arr=[];try{arr=JSON.parse(v1SafeGet('talcaExpBackups')||'[]')}catch(e){};modal(`<div class="headrow"><div><h2>Copias de seguridad</h2><div class="muted">La migración a v1.0 crea un respaldo automático.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="toolbar"><button class="btn btn-primary" onclick="exportBackupV1()">Descargar respaldo</button><label class="btn btn-secondary">Importar respaldo<input type="file" accept=".json" hidden onchange="importBackupV1(this)"></label></div><div style="margin-top:16px">${arr.length?arr.slice().reverse().map(b=>`<div class="card" style="margin-bottom:8px"><b>${b.label}</b><br><span class="muted">${fmtDate(b.date)}</span></div>`).join(''):'<span class="muted">No hay respaldos automáticos.</span>'}</div>` )}
 
 
@@ -92,21 +82,6 @@ function v11PendingOptions(selected=''){
  return ['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias','immediate']
   .map(k=>`<option value="${k}" ${selected===k?'selected':''}>${V11_PENDING_LABELS[k]}</option>`).join('')
 }
-function v11Migrate(){
- let changed=false;
- if(!db.schemaVersion||db.schemaVersion<V11_SCHEMA_VERSION){v1Backup('Antes de actualizar a v1.1');changed=true}
- db.schemaVersion=V11_SCHEMA_VERSION;
- (db.products||[]).forEach(p=>{
-   if(typeof p.employeeBenefit!=='boolean'){p.employeeBenefit=V11_BENEFIT_CODES.has(p.id);changed=true}
-   v1EnsureBucket(p.id)
- });
- (db.orders||[]).forEach(o=>{
-   o.deliveries=o.deliveries||[];
-   if(o.requestLines)o.requestLines.forEach(l=>{if(typeof l.resolvedTotal!=='number')l.resolvedTotal=0});
- });
- if(changed)safeSet(localStorage,'talcaExpV02',JSON.stringify(db))
-}
-v11Migrate();
 
 
 
@@ -142,7 +117,7 @@ addOrderLine=function(productId=''){
  box.appendChild(d);recalcOrderV11()
 };
 function syncRequestedV11(el){let r=el.closest('.line'),isPack=el.classList.contains('liReqPack'),target=r.querySelector(isPack?'.liPack':'.liUnit');if(!target.dataset.touched)target.value=el.value}
-addProductByCode=function(){let input=document.getElementById('quickProductCode'),q=(input?.value||'').trim().toLowerCase();if(!q)return;let matches=db.products.filter(p=>p.active!==false&&(p.id.toLowerCase()===q||p.name.toLowerCase().includes(q)));if(!matches.length)return toast('No se encontró el producto.', 'error');if(matches.length>1)return toast('Hay varias coincidencias; escriba el código exacto.', 'error');addOrderLine(matches[0].id);input.value='';input.focus()};
+addProductByCode=function(){let input=document.getElementById('quickProductCode'),q=(input?.value||'').trim().toLowerCase();if(!q)return;let matches=db.products.filter(p=>p.active!==false&&(p.id.toLowerCase()===q||p.name.toLowerCase().includes(q)));if(!matches.length)return alert('No se encontró el producto.');if(matches.length>1)return alert('Hay varias coincidencias; escriba el código exacto.');addOrderLine(matches[0].id);input.value='';input.focus()};
 function toggleOrderModeV11(){
  let type=document.getElementById('v11PendingType')?.value,immediate=type==='immediate';
  document.querySelectorAll('.v11-actual').forEach(x=>x.classList.toggle('hidden',!immediate));
@@ -163,14 +138,14 @@ function recalcOrderV11(){
 }
 function saveNewOrderV11(){
  let num=document.getElementById('v11Number').value.trim(),type=document.getElementById('v11PendingType').value,lines=getNewOrderLinesV11();
- if(!num||!lines.length||!lines.some(l=>l.requestedTotal>0))return toast('Complete el número y al menos una cantidad solicitada.', 'error');
- if(db.orders.some(o=>o.number===num))return toast('El número de orden ya existe.', 'error');
+ if(!num||!lines.length||!lines.some(l=>l.requestedTotal>0))return alert('Complete el número y al menos una cantidad solicitada.');
+ if(db.orders.some(o=>o.number===num))return alert('El número de orden ya existe.');
  let o={id:uid('o'),number:num,date:document.getElementById('v11Date').value,fleteroId:document.getElementById('v11Carrier').value,pendingType:type,requestLines:lines.map(l=>({productId:l.productId,total:l.requestedTotal,resolvedTotal:0})),deliveries:[],billing:'No aplica',note:document.getElementById('v11Note').value,createdBy:session.user,createdShift:session.shift,createdAt:now()};
  if(type!=='immediate'){
    o.requestLines.forEach(l=>v11IncreasePending(type,l.productId,l.total));o.status='Pendiente de despacho';db.orders.push(o);audit('Alta','Orden pendiente',num,V11_PENDING_LABELS[type]);save();closeModal();showPage('orders');return
  }
- let actual=lines.filter(l=>l.total>0);if(!actual.length)return toast('Ingrese lo realmente entregado.', 'error');
- let shortage=actual.some(l=>l.total>(db.stock[l.productId]||0)),just='';if(shortage){just=document.getElementById('stockJustification')?.value.trim()||'';if(!just)return toast('Debe justificar el stock insuficiente.', 'error')}
+ let actual=lines.filter(l=>l.total>0);if(!actual.length)return alert('Ingrese lo realmente entregado.');
+ let shortage=actual.some(l=>l.total>(db.stock[l.productId]||0)),just='';if(shortage){just=document.getElementById('stockJustification')?.value.trim()||'';if(!just)return alert('Debe justificar el stock insuficiente.')}
  actual.forEach(l=>addStockMove({type:'Orden de carga',ref:num,productId:l.productId,total:l.total,dir:'out',note:just}));
  let delivery={id:uid('d'),date:now(),lines:actual.map(l=>({sourceProductId:l.productId,productId:l.productId,total:l.total})),result:'Salida inmediata',note:o.note,user:session.user,shift:session.shift,palletOut:+document.getElementById('realPalletOut').value||0,palletIn:+document.getElementById('realPalletIn').value||0,chapOut:+document.getElementById('realChapOut').value||0,chapIn:+document.getElementById('realChapIn').value||0};
  o.deliveries.push(delivery);o.status=actual.reduce((s,l)=>s+l.total,0)>=o.requestLines.reduce((s,l)=>s+l.total,0)?'Despachada':'Parcial';o.requestLines.forEach(r=>{let a=actual.find(x=>x.productId===r.productId);r.resolvedTotal=Math.min(r.total,a?.total||0)});
@@ -184,7 +159,7 @@ function openPendingDispatchV11(o){
  modal(`<div class="headrow"><div><h2>Confirmar salida · Orden ${o.number}</h2><div class="muted">${f?.name||''} · ${V11_PENDING_LABELS[o.pendingType]} · Solo se descontará lo realmente entregado.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
  <div class="card v11-request-card"><h3>Pedido original</h3>${(o.requestLines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId);return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p?.name||l.productId}</b> · Solicitado ${equivalent(l.total,p)} · <span class="v11-pending-chip">Pendiente ${equivalent(v11LineOutstanding(l),p)}</span></div>`}).join('')}</div>
  <div class="headrow" style="margin-top:16px"><h3>Mercadería realmente entregada</h3><button class="btn btn-secondary" onclick="addPendingDispatchLineV11()">Agregar línea</button></div><div id="v11DispatchLines"></div>
- <div class="summary" style="display:none;"><div class="summarygrid"><div><span class="muted">Planchadas sugeridas</span><b id="v11DispatchPalletSuggest">0</b></div><div><label>Planchadas que lleva</label><input id="v11DispatchPalletOut" class="field" type="number" min="0" value="0"></div><div><label>Planchadas que devuelve</label><input id="v11DispatchPalletIn" class="field" type="number" min="0" value="0"></div><div><span class="muted">Chapadur sugerido</span><b id="v11DispatchChapSuggest">0</b></div><div><label>Chapadur que lleva</label><input id="v11DispatchChapOut" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que devuelve</label><input id="v11DispatchChapIn" class="field" type="number" min="0" value="0"></div></div></div>
+ <div class="summary" style="display:none;"><div class="summarygrid"><div><span class="muted">Pallets sugeridas</span><b id="v11DispatchPalletSuggest">0</b></div><div><label>Pallets que lleva</label><input id="v11DispatchPalletOut" class="field" type="number" min="0" value="0"></div><div><label>Pallets que devuelve</label><input id="v11DispatchPalletIn" class="field" type="number" min="0" value="0"></div><div><span class="muted">Chapadur sugerido</span><b id="v11DispatchChapSuggest">0</b></div><div><label>Chapadur que lleva</label><input id="v11DispatchChapOut" class="field" type="number" min="0" value="0"></div><div><label>Chapadur que devuelve</label><input id="v11DispatchChapIn" class="field" type="number" min="0" value="0"></div></div></div>
  <label>Observaciones</label><textarea id="v11DispatchNote"></textarea><div id="v11DispatchWarning"></div>
  <div class="right" style="margin-top:16px"><button class="btn btn-primary" onclick="savePendingDispatchV11('${o.id}')">Confirmar salida</button></div>`);
  (o.requestLines||[]).filter(l=>v11LineOutstanding(l)>0).forEach(l=>addPendingDispatchLineV11(l.productId,l.productId));
@@ -200,8 +175,8 @@ function syncDispatchActualV11(sel){let row=sel.closest('.v11-delivery-row'),act
 function getPendingDispatchLinesV11(){return [...document.querySelectorAll('#v11DispatchLines .v11-delivery-row')].map(r=>{let source=r.querySelector('.v11Source').value,productId=r.querySelector('.v11Actual').value,p=db.products.find(x=>x.id===productId),n=normalize(r.querySelector('.v11DPack').value,r.querySelector('.v11DUnit').value,p);return {sourceProductId:source,productId,total:n.total}}).filter(l=>l.total>0)}
 function recalcPendingDispatchV11(){let lines=getPendingDispatchLinesV11(),w=[];lines.forEach(l=>{let p=db.products.find(x=>x.id===l.productId);if(l.total>(db.stock[p.id]||0))w.push(`${p.name}: stock ${equivalent(db.stock[p.id]||0,p)}, entrega ${equivalent(l.total,p)}`)});let box=document.getElementById('v11DispatchWarning');if(box)box.innerHTML=w.length?`<div class="alert"><b>Stock insuficiente.</b><br>${w.join('<br>')}<label>Justificación obligatoria</label><textarea id="v11DispatchJustification"></textarea></div>`:''}
 function savePendingDispatchV11(orderId){
- let o=db.orders.find(x=>x.id===orderId),lines=getPendingDispatchLinesV11();if(!lines.length)return toast('Ingrese al menos una cantidad realmente entregada.', 'error');
- let totals={};lines.forEach(l=>totals[l.productId]=(totals[l.productId]||0)+l.total);let shortage=Object.entries(totals).some(([pid,t])=>t>(db.stock[pid]||0)),just='';if(shortage){just=document.getElementById('v11DispatchJustification')?.value.trim()||'';if(!just)return toast('Debe justificar el stock insuficiente.', 'error')}
+ let o=db.orders.find(x=>x.id===orderId),lines=getPendingDispatchLinesV11();if(!lines.length)return alert('Ingrese al menos una cantidad realmente entregada.');
+ let totals={};lines.forEach(l=>totals[l.productId]=(totals[l.productId]||0)+l.total);let shortage=Object.entries(totals).some(([pid,t])=>t>(db.stock[pid]||0)),just='';if(shortage){just=document.getElementById('v11DispatchJustification')?.value.trim()||'';if(!just)return alert('Debe justificar el stock insuficiente.')}
  lines.forEach(l=>{
    addStockMove({type:l.productId===l.sourceProductId?'Orden de carga':'Orden de carga · Sustitución',ref:o.number,productId:l.productId,total:l.total,dir:'out',note:just});
    let req=v11FindRequestLine(o,l.sourceProductId);if(req&&l.productId===l.sourceProductId){let applied=Math.min(v11LineOutstanding(req),l.total);req.resolvedTotal=Number(req.resolvedTotal||0)+applied;v11DecreasePending(o.pendingType,l.sourceProductId,applied)}
@@ -220,7 +195,13 @@ openMovement=function(type){return _v11OriginalOpenMovement(type)};
 function addNeutralMoveV11({type,ref,productId,total,note=''}){db.movements.push({id:uid('m'),date:now(),type,ref,productId,total,dir:'none',note,user:session.user,shift:session.shift});let p=db.products.find(x=>x.id===productId);audit('Movimiento sin impacto',type,ref,`${p?p.name:productId} ${p?equivalent(total,p):total}`)}
 
 
-function renderRecentV11(){let box=document.getElementById('recent');if(!box)return;let ms=[...(db.movements||[])].slice(-6).reverse();box.innerHTML=ms.length?ms.map(m=>{let p=db.products.find(x=>x.id===m.productId),impact=m.dir==='in'?'+':m.dir==='out'?'-':'Sin impacto: ';return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${m.type}</b> · ${p?.name||''} · ${impact}${equivalent(m.total,p)}<br><span class="muted">${fmtDate(m.date)} · ${m.user||''} · ${m.ref||''}</span></div>`}).join(''):''}
+function renderRecentV11(){let box=document.getElementById('recent');if(!box)return;let ms=[...(db.movements||[])].slice(-6).reverse();box.innerHTML=ms.length?ms.map(m=>{let p=db.products.find(x=>x.id===m.productId),impact=m.dir==='in'?'+':m.dir==='out'?'-':'Sin impacto: ';return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${m.type}</b> · ${p?.name||''} · ${impact}${equivalent(m.total,p)}<br><span class="muted">${fmtDate(m.date)} · ${m.user||''} · ${m.ref||''}</span></div>`}).join(''):'<span class="muted">Aún no hay movimientos.</span>'}
+
+
+
+addProduct=function(){let id=prompt('Código del producto:');if(!id)return;if(db.products.some(p=>p.id===id))return alert('Ese código ya existe.');let name=prompt('Nombre del producto:');if(!name)return;let pack=Number(prompt('Unidades por fardo:','6'));if(!pack)return;let perCut=Number(prompt('Fardos por corte:','20'));if(!perCut)return;let cuts=Number(prompt('Cortes por pallet:','4'));if(!cuts)return;let minStock=Number(prompt('Stock mínimo en fardos:','0')||0),criticalStock=Number(prompt('Stock crítico en fardos:','0')||0),employeeBenefit=confirm('Aceptar para habilitar este producto en el beneficio de empleados.');db.products.push({id,name,pack,perCut,cuts,minStock,criticalStock,active:true,employeeBenefit});db.stock[id]=0;db.stockBuckets=db.stockBuckets||{};v1EnsureBucket(id);audit('Alta','Producto',id,name);save()};
+editProduct=function(id){let p=db.products.find(x=>x.id===id);if(!p)return;let ni=prompt('Código alfanumérico:',p.id);if(!ni)return;if(ni!==p.id&&db.products.some(x=>x.id===ni))return alert('Ese código ya existe.');let old=p.id;p.name=prompt('Nombre:',p.name)||p.name;p.pack=Number(prompt('Unidades por fardo:',String(p.pack))||p.pack);p.perCut=Number(prompt('Fardos por corte:',String(p.perCut))||p.perCut);p.cuts=Number(prompt('Cortes por pallet:',String(p.cuts))||p.cuts);p.minStock=Number(prompt('Stock mínimo en fardos:',String(p.minStock||0))||0);p.criticalStock=Number(prompt('Stock crítico en fardos:',String(p.criticalStock||0))||0);p.employeeBenefit=confirm('Aceptar para HABILITAR el producto en el beneficio de empleados. Cancelar para DESHABILITARLO.');p.active=confirm('Aceptar para dejar el producto ACTIVO. Cancelar para marcarlo INACTIVO.');if(ni!==old){p.id=ni;db.stock[ni]=db.stock[old]||0;delete db.stock[old];if(db.stockBuckets?.[old]){db.stockBuckets[ni]=db.stockBuckets[old];delete db.stockBuckets[old]}(db.movements||[]).forEach(m=>{if(m.productId===old)m.productId=ni});(db.orders||[]).forEach(o=>{(o.requestLines||[]).forEach(l=>{if(l.productId===old)l.productId=ni});(o.deliveries||[]).forEach(d=>(d.lines||[]).forEach(l=>{if(l.productId===old)l.productId=ni;if(l.sourceProductId===old)l.sourceProductId=ni}))})}save()};
+function renderProductsConfigV11(){let box=document.getElementById('productsList');if(!box)return;box.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet · Beneficio empleados: <b>${p.employeeBenefit?'Sí':'No'}</b></span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('')}
 
 
 
@@ -395,7 +376,7 @@ showEmployeeReceipt=function(e,items,title,prefix,providedNumber=''){
   setPrintableDocument(title,body);
   let area=document.getElementById('employeeReceiptArea');
   if(!area){
-    toast('La operación se registró correctamente, pero no se encontró el área del comprobante.', 'error');
+    alert('La operación se registró correctamente, pero no se encontró el área del comprobante.');
     return;
   }
   area.innerHTML=`<div class="card receipt-success"><div class="headrow"><div><h2>Operación registrada correctamente</h2><div class="muted">${title} · Comprobante ${number}</div></div></div>
@@ -411,17 +392,17 @@ showEmployeeReceipt=function(e,items,title,prefix,providedNumber=''){
 
 saveWorkbenchConsumption=function(){
   let e=db.employees.find(x=>x.id===selectedEmployeeId);
-  if(!e||e.active===false)return toast('Seleccione un empleado activo.', 'error');
+  if(!e||e.active===false)return alert('Seleccione un empleado activo.');
 
   let items;
   try{items=collectWorkbenchConsumptionV12()}
-  catch(err){return toast(err.message, 'error')}
+  catch(err){return alert(err.message)}
 
-  if(!items.length)return toast('Agregue al menos un producto y una cantidad válida.', 'error');
+  if(!items.length)return alert('Agregue al menos un producto y una cantidad válida.');
 
   let totalPacks=items.reduce((sum,x)=>sum+x.packs,0);
   if(totalPacks>Number(e.balance||0)){
-    return toast(`Saldo insuficiente. El consumo suma ${totalPacks} fardos y el empleado dispone de ${e.balance||0}.`, 'error');
+    return alert(`Saldo insuficiente. El consumo suma ${totalPacks} fardos y el empleado dispone de ${e.balance||0}.`);
   }
 
   let shortages=items.filter(x=>x.n.total>Number(db.stock[x.p.id]||0));
@@ -491,21 +472,6 @@ function v13SnapshotOrder(o){
     requestLines:o.requestLines||[],deliveries:o.deliveries||[]
   });
 }
-function v13Migrate(){
-  let changed=false;
-  if(Number(db.schemaVersion||0)<V13_SCHEMA_VERSION){
-    try{v1Backup('Antes de actualizar a v1.3')}catch(err){console.error(err)}
-    changed=true;
-  }
-  db.schemaVersion=V13_SCHEMA_VERSION;
-  (db.orders||[]).forEach(o=>{
-    o.editHistory=o.editHistory||[];
-    let f=db.fleteros.find(x=>x.id===o.fleteroId);
-    if(!o.carrierSnapshot&&f){o.carrierSnapshot={id:f.id,name:f.name||'',surname:f.surname||'',company:f.company||''};changed=true}
-  });
-  if(changed)safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-}
-v13Migrate();
 
 
 
@@ -686,7 +652,7 @@ function v13RecalcOrder(){
 }
 function v13OpenOrderEditor(existingId=''){
   let o=existingId?db.orders.find(x=>x.id===existingId):null;
-  if(o&&!Array.isArray(o.requestLines))return toast('Esta orden pertenece a una versión anterior y todavía no admite edición completa.', 'error');
+  if(o&&!Array.isArray(o.requestLines))return alert('Esta orden pertenece a una versión anterior y todavía no admite edición completa.');
   v13EditingOrderId=o?.id||'';
   let carrier=o?v13OrderCarrier(o):null;
   let type=o?.pendingType||'administrative';
@@ -768,18 +734,18 @@ function v13SaveOrder(){
   let note=document.getElementById('v13Note').value.trim();
   let billing=document.getElementById('v13Billing').value;
   let correctionReason=existing?(document.getElementById('v13CorrectionReason').value.trim()):'';
-  if(!number||!date)return toast('Complete número de orden y fecha.', 'error');
-  if(existing&&!correctionReason)return toast('Ingrese el motivo de la corrección.', 'error');
-  if(db.orders.some(o=>o.number===number&&o.id!==existing?.id))return toast('El número de orden ya existe.', 'error');
+  if(!number||!date)return alert('Complete número de orden y fecha.');
+  if(existing&&!correctionReason)return alert('Ingrese el motivo de la corrección.');
+  if(db.orders.some(o=>o.number===number&&o.id!==existing?.id))return alert('El número de orden ya existe.');
 
   let formLines=v13CollectLines();
-  if(!formLines.length||!formLines.some(l=>l.requestedTotal>0))return toast('Agregue al menos un producto con cantidad solicitada.', 'error');
+  if(!formLines.length||!formLines.some(l=>l.requestedTotal>0))return alert('Agregue al menos un producto con cantidad solicitada.');
   let hasDeliveries=Boolean((existing?.deliveries||[]).length);
-  if(hasDeliveries&&existing.pendingType==='immediate'&&type!=='immediate')return toast('Una salida inmediata ya confirmada no puede cambiar de circuito.', 'error');
-  if(hasDeliveries&&v13IsOperational(existing.pendingType)&&!v13IsOperational(type))return toast('Una orden con salidas confirmadas debe permanecer en un pendiente operativo.', 'error');
+  if(hasDeliveries&&existing.pendingType==='immediate'&&type!=='immediate')return alert('Una salida inmediata ya confirmada no puede cambiar de circuito.');
+  if(hasDeliveries&&v13IsOperational(existing.pendingType)&&!v13IsOperational(type))return alert('Una orden con salidas confirmadas debe permanecer en un pendiente operativo.');
 
   let carrier;
-  try{carrier=v13ResolveCarrier()}catch(err){return toast(err.message, 'error')}
+  try{carrier=v13ResolveCarrier()}catch(err){return alert(err.message)}
 
   let before=existing?v13SnapshotOrder(existing):null;
   let oldNumber=existing?.number||number;
@@ -811,7 +777,7 @@ function v13SaveOrder(){
     let actualMap=v13AggregateActualFromLines(formLines);
     if(!Object.values(actualMap).some(v=>v>0)){
       if(existing)v13ApplyOutstanding(existing.pendingType,oldOutstanding,1);
-      return toast('Ingrese la cantidad realmente entregada.', 'error');
+      return alert('Ingrese la cantidad realmente entregada.');
     }
     let shortages=Object.entries(actualMap).filter(([pid,total])=>total>Number(db.stock[pid]||0));
     let justification='';
@@ -819,7 +785,7 @@ function v13SaveOrder(){
       justification=document.getElementById('v13StockJustification')?.value.trim()||'';
       if(!justification){
         if(existing)v13ApplyOutstanding(existing.pendingType,oldOutstanding,1);
-        return toast('Debe justificar el stock insuficiente.', 'error');
+        return alert('Debe justificar el stock insuficiente.');
       }
     }
     let products=new Set([...Object.keys(oldActual),...Object.keys(actualMap)]);
@@ -899,24 +865,6 @@ function v14SearchNorm(value){
   return String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 }
 function v14DatePart(value){return String(value||'').slice(0,10)}
-function v14Migrate(){
-  let changed=false;
-  if(Number(db.schemaVersion||0)<V14_SCHEMA_VERSION){
-    try{v1Backup('Antes de actualizar a v1.4')}catch(err){console.error(err)}
-    changed=true;
-  }
-  db.schemaVersion=V14_SCHEMA_VERSION;
-  (db.products||[]).forEach(p=>{
-    if(!p.alias){
-      p.alias=V14_DEFAULT_ALIASES[p.id]||'';
-      changed=true;
-    }
-    v1EnsureBucket(p.id);
-  });
-  if(changed)safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-}
-v14Migrate();
-
 
 
 // Sin codificar deja de ser una afectación posible de las órdenes.
@@ -944,7 +892,10 @@ v11OrderStatus=function(o){
 function v14DeliverableStock(bucket){return Math.max(0,Number(bucket.physical||0)-Number(bucket.sinCodificar||0))}
 v1Pct=function(bucket){
   let total=v1PendingTotal(bucket);
-  return total===0?null:(v14DeliverableStock(bucket)/total)*100;
+  if (total === 0) return null;
+  let deliverable=v14DeliverableStock(bucket);
+  if (deliverable === 0) return -100;
+  return ((deliverable-total)/deliverable)*100;
 };
 v1State=function(bucket){
   let total=v1PendingTotal(bucket);
@@ -1055,20 +1006,20 @@ function saveProductionV14(){
       if(m){m.productionClass='uncoded';m.noDelivery=true}
     }
   });
-  if(!has)return toast('Agregue al menos un producto con cantidad.', 'error');
+  if(!has)return alert('Agregue al menos un producto con cantidad.');
   save();closeModal();
 }
 
 // Alias y configuración de productos.
 addProduct=function(){
   let id=(prompt('Código del producto:')||'').trim();if(!id)return;
-  if(db.products.some(p=>p.id===id))return toast('Ese código ya existe.', 'error');
+  if(db.products.some(p=>p.id===id))return alert('Ese código ya existe.');
   let name=(prompt('Nombre del producto:')||'').trim();if(!name)return;
   let alias=(prompt('Alias de búsqueda (ej.: CO3):','')||'').trim().toUpperCase();
-  if(alias&&db.products.some(p=>v14SearchNorm(p.alias)===v14SearchNorm(alias)))return toast('Ese alias ya existe.', 'error');
+  if(alias&&db.products.some(p=>v14SearchNorm(p.alias)===v14SearchNorm(alias)))return alert('Ese alias ya existe.');
   let pack=Number(prompt('Unidades por fardo:','6'));if(!pack)return;
   let perCut=Number(prompt('Fardos por corte:','20'));if(!perCut)return;
-  let cuts=Number(prompt('Cortes por planchada:','4'));if(!cuts)return;
+  let cuts=Number(prompt('Cortes por pallet:','4'));if(!cuts)return;
   let minStock=Number(prompt('Stock mínimo en fardos:','0')||0),criticalStock=Number(prompt('Stock crítico en fardos:','0')||0);
   db.products.push({id,name,alias,pack,perCut,cuts,minStock,criticalStock,active:true,employeeBenefit:false});
   db.stock[id]=0;v1EnsureBucket(id);audit('Alta','Producto',id,`${name} · ${alias}`);save();
@@ -1076,14 +1027,14 @@ addProduct=function(){
 editProduct=function(id){
   let p=db.products.find(x=>x.id===id);if(!p)return;
   let newId=(prompt('Código alfanumérico:',p.id)||'').trim();if(!newId)return;
-  if(newId!==p.id&&db.products.some(x=>x.id===newId))return toast('Ese código ya existe.', 'error');
+  if(newId!==p.id&&db.products.some(x=>x.id===newId))return alert('Ese código ya existe.');
   let alias=(prompt('Alias de búsqueda:',p.alias||'')||'').trim().toUpperCase();
-  if(alias&&db.products.some(x=>x.id!==p.id&&v14SearchNorm(x.alias)===v14SearchNorm(alias)))return toast('Ese alias ya existe.', 'error');
+  if(alias&&db.products.some(x=>x.id!==p.id&&v14SearchNorm(x.alias)===v14SearchNorm(alias)))return alert('Ese alias ya existe.');
   let old=p.id;
   p.name=(prompt('Nombre:',p.name)||p.name).trim();
   p.alias=alias;p.pack=Number(prompt('Unidades por fardo:',String(p.pack))||p.pack);
   p.perCut=Number(prompt('Fardos por corte:',String(p.perCut))||p.perCut);
-  p.cuts=Number(prompt('Cortes por planchada:',String(p.cuts))||p.cuts);
+  p.cuts=Number(prompt('Cortes por pallet:',String(p.cuts))||p.cuts);
   p.minStock=Number(prompt('Stock mínimo en fardos:',String(p.minStock||0))||0);
   p.criticalStock=Number(prompt('Stock crítico en fardos:',String(p.criticalStock||0))||0);
   p.employeeBenefit=confirm('Aceptar para habilitar este producto para el beneficio de empleados.');
@@ -1109,7 +1060,7 @@ function v14RenderProductConfig(){
   let list=document.getElementById('productsList');if(!list)return;
   list.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
     <b>${v14Text(p.id)}${p.alias?` · ${v14Text(p.alias)}`:''} · ${v14Text(p.name)}</b><br>
-    <span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/planchada · Beneficio: ${p.employeeBenefit?'Sí':'No'}</span>
+    <span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet · Beneficio: ${p.employeeBenefit?'Sí':'No'}</span>
     <div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div>
   </div>`).join('');
 }
@@ -1168,7 +1119,7 @@ function v14ProductSearchKey(event){
   if(event.key!=='Enter')return;
   event.preventDefault();
   let list=v14ProductMatches(event.currentTarget.value);
-  if(!list.length)return toast('No se encontró el producto por código, alias o nombre.', 'error');
+  if(!list.length)return alert('No se encontró el producto por código, alias o nombre.');
   v14ChooseDraftProduct(list[0].id);
 }
 function v14DraftPackKey(event){
@@ -1206,9 +1157,9 @@ function v14ConfirmDraftProduct(){
     if(matches.length)v14DraftProductId=matches[0].id;
   }
   let p=db.products.find(x=>x.id===v14DraftProductId);
-  if(!p)return toast('Seleccione un producto válido.', 'error');
+  if(!p)return alert('Seleccione un producto válido.');
   let n=normalize(document.getElementById('v14DraftPack').value,document.getElementById('v14DraftUnit').value,p);
-  if(!n.total)return toast('Ingrese una cantidad en fardos o unidades.', 'error');
+  if(!n.total)return alert('Ingrese una cantidad en fardos o unidades.');
   let existing=document.querySelector(`#v14ConfirmedLines .v14-confirmed-line[data-product-id="${CSS.escape(p.id)}"]`);
   let immediate=document.getElementById('v13OrderType').value==='immediate';
   if(existing){
@@ -1227,9 +1178,11 @@ function v14ConfirmDraftProduct(){
   document.getElementById('v14ProductSearch').value='';
   document.getElementById('v14DraftPack').value='0';
   document.getElementById('v14DraftUnit').value='0';
-  let searchInput = document.getElementById('v14ProductSearch');
-  if(searchInput) searchInput.focus();
   v13RecalcOrder();
+  setTimeout(() => {
+    let searchInput = document.getElementById('v14ProductSearch');
+    if (searchInput) searchInput.focus();
+  }, 50);
 }
 function v14SyncConfirmed(input){
   if(document.getElementById('v13OrderType')?.value!=='immediate')return;
@@ -1295,7 +1248,7 @@ v13ToggleMode=function(){
 
 function v13OpenOrderEditor(existingId=''){
   let o=existingId?db.orders.find(x=>x.id===existingId):null;
-  if(o&&!Array.isArray(o.requestLines))return toast('Esta orden pertenece a una versión anterior y todavía no admite edición completa.', 'error');
+  if(o&&!Array.isArray(o.requestLines))return alert('Esta orden pertenece a una versión anterior y todavía no admite edición completa.');
   v13EditingOrderId=o?.id||'';
   let carrier=o?v13OrderCarrier(o):null,type=o?.pendingType||'administrative';
   let hasDeliveries=Boolean((o?.deliveries||[]).length),actual=v13ActualTotals(o);
@@ -1336,9 +1289,9 @@ function v13OpenOrderEditor(existingId=''){
     <div id="v14ConfirmedLines" class="v14-confirmed-list"></div>
   </div>
   <div id="v13Materials" class="summary" style="display:none;"><div class="summarygrid">
-    <div><span class="muted">Planchadas sugeridas</span><b id="v13SuggestPallet">0</b></div>
-    <div><label>Planchadas que lleva</label><input id="v13PalletOut" class="field" type="number" min="0" value="0"></div>
-    <div><label>Planchadas que devuelve</label><input id="v13PalletIn" class="field" type="number" min="0" value="0"></div>
+    <div><span class="muted">Pallets sugeridas</span><b id="v13SuggestPallet">0</b></div>
+    <div><label>Pallets que lleva</label><input id="v13PalletOut" class="field" type="number" min="0" value="0"></div>
+    <div><label>Pallets que devuelve</label><input id="v13PalletIn" class="field" type="number" min="0" value="0"></div>
     <div><span class="muted">Chapadur sugerido</span><b id="v13SuggestChap">0</b></div>
     <div><label>Chapadur que lleva</label><input id="v13ChapOut" class="field" type="number" min="0" value="0"></div>
     <div><label>Chapadur que devuelve</label><input id="v13ChapIn" class="field" type="number" min="0" value="0"></div>
@@ -1361,12 +1314,12 @@ function v13OpenOrderEditor(existingId=''){
 // El guardado de v1.3 sigue utilizándose, con el Estado de Facturación oculto.
 const _v14V13SaveOrder=v13SaveOrder;
 v13SaveOrder=function(){
-  if(document.getElementById('v13OrderType')?.value==='sinCodificar')return toast('Seleccione una afectación operativa válida o PENDIENTE. Sin codificar ya no corresponde a órdenes.', 'error');
+  if(document.getElementById('v13OrderType')?.value==='sinCodificar')return alert('Seleccione una afectación operativa válida o PENDIENTE. Sin codificar ya no corresponde a órdenes.');
   if(document.getElementById('v13OrderType')?.value==='immediate'){
     let blocked=v13CollectLines().filter(l=>{let physical=Number(db.stock[l.productId]||0),deliverable=v14DeliverableStock(v1EnsureBucket(l.productId));return l.actualTotal>deliverable&&l.actualTotal<=physical});
     if(blocked.length){
       let detail=blocked.map(l=>{let p=db.products.find(x=>x.id===l.productId);return `${p.name}: entregable ${equivalent(v14DeliverableStock(v1EnsureBucket(p.id)),p)}, solicitado ${equivalent(l.actualTotal,p)}`}).join('\n');
-      return toast('La salida incluye mercadería sin codificar o supera el stock entregable:\n'+detail, 'error');
+      return alert('La salida incluye mercadería sin codificar o supera el stock entregable:\n'+detail);
     }
   }
   return _v14V13SaveOrder();
@@ -1405,7 +1358,7 @@ function viewOrder(id){
   let o=db.orders.find(x=>x.id===id);if(!o)return;
   let f=v13OrderCarrier(o),modern=Array.isArray(o.requestLines),outstanding=modern?v11OrderOutstanding(o):0;
   let requests=modern?`<div class="card v11-request-card"><h3>Solicitud</h3>${o.requestLines.map(l=>{let p=db.products.find(x=>x.id===l.productId);return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${v14Text(p?.name||l.productId)}</b>: ${equivalent(l.total,p)} · Resuelto ${equivalent(Math.min(l.total,l.resolvedTotal||0),p)} · <b>Restante ${equivalent(v11LineOutstanding(l),p)}</b></div>`}).join('')}</div>`:'';
-  let deliveries=(o.deliveries||[]).map((d,i)=>`<div class="card" style="margin-top:10px"><b>Salida ${i+1}</b> · ${fmtDate(d.date)} · ${v14Text(d.user||'')} · Turno ${v14Text(d.shift||'')}<br><br>${(d.lines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId),s=db.products.find(x=>x.id===(l.sourceProductId||l.productId)),change=l.sourceProductId&&l.sourceProductId!==l.productId?` <span class="status open">Sustituye a ${v14Text(s?.name||l.sourceProductId)}</span>`:'';return `<b>${v14Text(p?.name||l.productId)}</b>: ${equivalent(l.total,p)}${change}`}).join('<br>')}<br><span class="muted">Planchadas: sale ${d.palletOut||0}, entra ${d.palletIn||0}. Chapadur: sale ${d.chapOut||0}, entra ${d.chapIn||0}.</span></div>`).join('')||'<div class="card" style="margin-top:10px"><span class="muted">Todavía no se confirmó ninguna salida.</span></div>';
+  let deliveries=(o.deliveries||[]).map((d,i)=>`<div class="card" style="margin-top:10px"><b>Salida ${i+1}</b> · ${fmtDate(d.date)} · ${v14Text(d.user||'')} · Turno ${v14Text(d.shift||'')}<br><br>${(d.lines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId),s=db.products.find(x=>x.id===(l.sourceProductId||l.productId)),change=l.sourceProductId&&l.sourceProductId!==l.productId?` <span class="status open">Sustituye a ${v14Text(s?.name||l.sourceProductId)}</span>`:'';return `<b>${v14Text(p?.name||l.productId)}</b>: ${equivalent(l.total,p)}${change}`}).join('<br>')}<br><span class="muted">Pallets: sale ${d.palletOut||0}, entra ${d.palletIn||0}. Chapadur: sale ${d.chapOut||0}, entra ${d.chapIn||0}.</span></div>`).join('')||'<div class="card" style="margin-top:10px"><span class="muted">Todavía no se confirmó ninguna salida.</span></div>';
   let history=(o.editHistory||[]).slice().reverse().map(h=>`<div class="v13-edit-history"><b>${fmtDate(h.date)} · ${v14Text(h.user||'')} · Turno ${v14Text(h.shift||'')}</b><br>${v14Text(h.reason||'Sin motivo indicado')}</div>`).join('');
   let status=modern?v11OrderStatus(o):o.status;
   modal(`<div class="headrow"><div><h2>Orden ${v14Text(o.number)}</h2><div class="muted">${v14Text(v13CarrierDisplay(f))} · ${v14Text(o.date)} · ${v14Text(V11_PENDING_LABELS[o.pendingType||'legacy']||'Operación histórica')}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
@@ -1444,7 +1397,7 @@ generateShiftSummary=function(){
   let otherRows=other.map(m=>{let p=db.products.find(x=>x.id===m.productId);return `<tr><td>${v14Text(m.type)}</td><td>${v14Text(m.ref)}</td><td>${v14Text(p?.name||m.productId)}</td><td>${m.dir==='neutral'?'Sin impacto':(m.dir==='in'?'+':'-')+equivalent(m.total,p)}</td></tr>`}).join('');
   let body=`<h1>Resumen de turno</h1><p><b>Fecha:</b> ${today} · <b>Turno:</b> ${v14Text(shift)} · <b>Encargado:</b> ${v14Text(session.user)}</p>
   <h2>Órdenes de carga trabajadas</h2>${orderBlocks||'<p>No se registraron ni despacharon órdenes durante este turno.</p>'}
-  <h2>Materiales</h2><p>Planchadas entregadas: ${mats.reduce((s,m)=>s+Number(m.palletOut||0),0)} · devueltas: ${mats.reduce((s,m)=>s+Number(m.palletIn||0),0)} · Chapadur entregado: ${mats.reduce((s,m)=>s+Number(m.chapOut||0),0)} · devuelto: ${mats.reduce((s,m)=>s+Number(m.chapIn||0),0)}</p>
+  <h2>Materiales</h2><p>Pallets entregadas: ${mats.reduce((s,m)=>s+Number(m.palletOut||0),0)} · devueltas: ${mats.reduce((s,m)=>s+Number(m.palletIn||0),0)} · Chapadur entregado: ${mats.reduce((s,m)=>s+Number(m.chapOut||0),0)} · devuelto: ${mats.reduce((s,m)=>s+Number(m.chapIn||0),0)}</p>
   ${otherRows?`<h2>Otros movimientos</h2><table><thead><tr><th>Tipo</th><th>Referencia</th><th>Producto</th><th>Cantidad</th></tr></thead><tbody>${otherRows}</tbody></table>`:''}`;
   setPrintableDocument('Resumen de turno',body);printCurrentDocument();
 };
@@ -1461,7 +1414,7 @@ showEmployeeReceipt=function(e,items,title,prefix,providedNumber=''){
   let body=`<div class="v14-receipt-sheet">${half('FACTURACIÓN',true)}${half('CONTROL DE GUARDIA',false)}</div>`;
   setPrintableDocument(title,body);
   let area=document.getElementById('employeeReceiptArea');
-  if(!area)return toast('La operación se registró correctamente, pero no se encontró el área del comprobante.', 'error');
+  if(!area)return alert('La operación se registró correctamente, pero no se encontró el área del comprobante.');
   area.innerHTML=`<div class="card receipt-success"><div class="headrow"><div><h2>Operación registrada correctamente</h2><div class="muted">${v14Text(title)} · Comprobante ${v14Text(number)} · Una hoja A4</div></div></div>${body}<div class="receipt-actions no-print"><button class="btn btn-secondary" onclick="document.getElementById('employeeReceiptArea').classList.add('hidden')">Cerrar</button><button class="btn btn-secondary" onclick="openPrintableDocument()">Vista imprimible</button><button class="btn btn-primary" onclick="printCurrentDocument()">Imprimir / Guardar como PDF</button></div></div>`;
   area.classList.remove('hidden');area.scrollIntoView({behavior:'smooth',block:'start'});
 };
@@ -1488,7 +1441,7 @@ savePendingDispatchV11=function(orderId){
   let blocked=Object.entries(totals).filter(([pid,total])=>{let physical=Number(db.stock[pid]||0),deliverable=v14DeliverableStock(v1EnsureBucket(pid));return total>deliverable&&total<=physical});
   if(blocked.length){
     let detail=blocked.map(([pid,total])=>{let p=db.products.find(x=>x.id===pid);return `${p.name}: entregable ${equivalent(v14DeliverableStock(v1EnsureBucket(pid)),p)}, entrega ${equivalent(total,p)}`}).join('\n');
-    return toast('No se puede confirmar la salida porque supera el stock entregable:\n'+detail, 'error');
+    return alert('No se puede confirmar la salida porque supera el stock entregable:\n'+detail);
   }
   return _v14SavePendingDispatch(orderId);
 };
@@ -1508,13 +1461,6 @@ document.addEventListener('click',event=>{
 // 3) Totales al pie de la tabla de stock.
 
 const V15_SCHEMA_VERSION=6;
-(function v15Migrate(){
-  if(Number(db.schemaVersion||0)<V15_SCHEMA_VERSION){
-    try{v1Backup('Antes de actualizar a v1.5')}catch(err){console.error(err)}
-    db.schemaVersion=V15_SCHEMA_VERSION;
-    safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-  }
-})();
 
 
 
@@ -1527,7 +1473,7 @@ function v15FormatNumber(value,max=2){
   return n.toLocaleString('es-AR',{minimumFractionDigits:Number.isInteger(n)?0:0,maximumFractionDigits:max});
 }
 function v15FormatFardos(value){
-  if (typeof v1StockUnit !== 'undefined' && v1StockUnit === 'planchadas') {
+  if (typeof v1StockUnit !== 'undefined' && v1StockUnit === 'pallets') {
     let pallets = Math.floor(value / 80);
     let remFardos = Math.floor(value % 80);
     let parts = [];
@@ -1652,13 +1598,6 @@ const V16_SCHEMA_VERSION=7;
 let currentPrintKind='report';
 let v16LastReceipt=null;
 
-(function v16Migrate(){
-  if(Number(db.schemaVersion||0)<V16_SCHEMA_VERSION){
-    try{v1Backup('Antes de actualizar a v1.6')}catch(err){console.error(err)}
-    db.schemaVersion=V16_SCHEMA_VERSION;
-    safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-  }
-})();
 
 
 
@@ -1755,206 +1694,9 @@ exportPendingCSV=function(){
   downloadCSV('pendientes_por_orden.csv',rows);
 };
 
-// ------------------------------------------------------------------
-// ÓRDENES: nuevas arriba, sin columna Materiales
-// ------------------------------------------------------------------
-function renderOrdersV16(){
-  let body=document.getElementById('ordersBody');if(!body)return;
-  let carrier=document.getElementById('ofCarrier')?.value||'',
-      date=document.getElementById('ofDate')?.value||'',
-      user=document.getElementById('ofUser')?.value||'',
-      shift=document.getElementById('ofShift')?.value||'';
 
-  let list=(db.orders||[]).filter(o=>{
-    let ds=o.deliveries||[];
-    return(!carrier||o.fleteroId===carrier)&&
-          (!date||o.date===date)&&
-          (!user||o.createdBy===user||ds.some(d=>d.user===user))&&
-          (!shift||o.createdShift===shift||ds.some(d=>d.shift===shift));
-  }).sort(v16NaturalCompareDesc);
 
-  if(!window.currentOrdersPage) window.currentOrdersPage = 1;
-  let totalPages = Math.ceil(list.length / 50) || 1;
-  if(window.currentOrdersPage > totalPages) window.currentOrdersPage = totalPages;
-  if(window.currentOrdersPage < 1) window.currentOrdersPage = 1;
-  
-  let start = (window.currentOrdersPage - 1) * 50;
-  let pagedList = list.slice(start, start + 50);
 
-  let html = pagedList.map(o=>{
-    let f=v13OrderCarrier(o),ds=o.deliveries||[];
-    let req=Array.isArray(o.requestLines)?v15OrderRequestedFardos(o):0;
-    let del=Array.isArray(o.requestLines)?v15OrderDeliveredFardos(o):0;
-    let last=ds.at(-1)||{},
-        status=Array.isArray(o.requestLines)?v11OrderStatus(o):o.status,
-        type=V11_PENDING_LABELS[o.pendingType||'legacy']||'Histórica',
-        cls=status==='PENDIENTE'?'v13-admin-pending':
-            String(status).includes('Pendiente')?'open':
-            String(status).includes('Parcial')?'partial':'done';
-
-    return `<tr>
-      <td><b>${v14Text(o.number)}</b></td>
-      <td>${v14Text(o.date)}</td>
-      <td>${v14Text(v13CarrierDisplay(f))}</td>
-      <td>${v14Text(type)}</td>
-      <td>${v14Text(last.user||o.createdBy||'')}</td>
-      <td>${v14Text(last.shift||o.createdShift||'')}</td>
-      <td><span class="status ${cls}">${v14Text(status)}</span></td>
-      <td>${v15FormatFardos(req)}</td>
-      <td>${v15FormatFardos(del)}</td>
-      <td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td>
-    </tr>`;
-  }).join('');
-  
-  if (!html) html = '<tr><td colspan="10" class="muted">No hay órdenes registradas.</td></tr>';
-  
-  if (totalPages > 1) {
-    html += `<tr><td colspan="10" style="text-align:center; padding: 10px;" class="no-print">
-      <button class="btn btn-secondary" onclick="window.currentOrdersPage--; renderOrdersV16()" ${window.currentOrdersPage===1?'disabled':''}>Anterior</button>
-      <span style="margin:0 15px">Página ${window.currentOrdersPage} de ${totalPages}</span>
-      <button class="btn btn-secondary" onclick="window.currentOrdersPage++; renderOrdersV16()" ${window.currentOrdersPage===totalPages?'disabled':''}>Siguiente</button>
-    </td></tr>`;
-  }
-  body.innerHTML = html;
-}
-renderOrdersV15=renderOrdersV16;
-renderOrdersV13=renderOrdersV16;
-renderOrdersV11=renderOrdersV16;
-renderOrders=renderOrdersV16;
-
-// ------------------------------------------------------------------
-// MOVIMIENTOS: agrupación por operación
-// ------------------------------------------------------------------
-function v16GroupedMovements(){
-  let output=[],map=new Map();
-
-  [...(db.movements||[])].forEach(m=>{
-    if(!v16IsGroupedMovement(m)){
-      output.push({
-        key:`SINGLE|${m.id}`,
-        date:m.date,type:m.type,ref:m.ref||'',user:m.user||'',shift:m.shift||'',
-        input:(m.dir==='in'?v16MovementFardos(m):0),
-        output:(m.dir==='out'?v16MovementFardos(m):0),
-        neutral:(m.dir==='none'||m.dir==='neutral'?v16MovementFardos(m):0),
-        count:1,grouped:false
-      });
-      return;
-    }
-
-    let key=v16MovementGroupKey(m);
-    if(!map.has(key)){
-      map.set(key,{
-        key,date:m.operationDate||m.date,
-        type:v16BaseMovementType(m.type),ref:m.ref||'',
-        user:m.user||'',shift:m.shift||'',
-        input:0,output:0,neutral:0,count:0,grouped:true
-      });
-    }
-    let g=map.get(key);
-    if(String(m.date||'')>String(g.date||''))g.date=m.date;
-    if(m.dir==='in')g.input+=v16MovementFardos(m);
-    else if(m.dir==='out')g.output+=v16MovementFardos(m);
-    else if(m.dir==='none'||m.dir==='neutral')g.neutral+=v16MovementFardos(m);
-    g.count++;
-  });
-
-  output.push(...map.values());
-  return output.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-}
-
-function renderEditMovementBtn(g) {
-  let editableTypes = ['Producción', 'Rebote', 'Derrame', 'Recepción desde Mendoza', 'Recepción desde San Juan', 'Envío a Mendoza', 'Envío a San Juan'];
-  if (editableTypes.includes(g.type)) {
-    return `<td class="no-print"><button class="btn btn-secondary" onclick="editMovement('${g.id}')">Corregir</button></td>`;
-  }
-  return '<td class="no-print"></td>';
-}
-
-function renderMovementsV16(){
-  let body=document.getElementById('movementsBody');if(!body)return;
-  let list=v16GroupedMovements();
-  
-  if(!window.currentMovementsPage) window.currentMovementsPage = 1;
-  let totalPages = Math.ceil(list.length / 50) || 1;
-  if(window.currentMovementsPage > totalPages) window.currentMovementsPage = totalPages;
-  if(window.currentMovementsPage < 1) window.currentMovementsPage = 1;
-  
-  let start = (window.currentMovementsPage - 1) * 50;
-  let pagedList = list.slice(start, start + 50);
-
-  let html = pagedList.map(g=>`<tr>
-    <td>${fmtDate(g.date)}</td>
-    <td>${v14Text(g.type)}${g.count>1?`<span class="v16-group-badge">${g.count} productos</span>`:''}</td>
-    <td>${v14Text(g.ref||'')}</td>
-    <td>${g.input?v16FmtFardos(g.input):''}</td>
-    <td>${g.output?v16FmtFardos(g.output):''}</td>
-    <td>${g.neutral?v16FmtFardos(g.neutral):''}</td>
-    <td>${v14Text(g.user||'')}</td>
-    <td>${v14Text(g.shift||'')}</td>
-    ${renderEditMovementBtn(g)}
-  </tr>`).join('');
-  
-  if (!html) html = '<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
-  
-  if (totalPages > 1) {
-    html += `<tr><td colspan="9" style="text-align:center; padding: 10px;" class="no-print">
-      <button class="btn btn-secondary" onclick="window.currentMovementsPage--; renderMovementsV16()" ${window.currentMovementsPage===1?'disabled':''}>Anterior</button>
-      <span style="margin:0 15px">Página ${window.currentMovementsPage} de ${totalPages}</span>
-      <button class="btn btn-secondary" onclick="window.currentMovementsPage++; renderMovementsV16()" ${window.currentMovementsPage===totalPages?'disabled':''}>Siguiente</button>
-    </td></tr>`;
-  }
-  body.innerHTML = html;
-}
-
-function editMovement(id) {
-  let m = db.movements.find(x => x.id === id);
-  if (!m) return;
-  let groupedMoves = m.operationId ? db.movements.filter(x => x.operationId === m.operationId) : [m];
-  
-  let lines = groupedMoves.map(move => {
-    let p = db.products.find(x => x.id === move.productId);
-    let eq = p ? equivalent(move.total, p) : move.total;
-    return `<div><b>${v14Text(p?.name || move.productId)}</b>: ${eq}</div>`;
-  }).join('');
-
-  let oldDateStr = m.date.slice(0, 10);
-  
-  modal(`<div class="headrow"><div><h2>Corregir ${m.type}</h2></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
-  <div class="summary">
-    ${lines}
-    <div class="muted">Ref: ${v14Text(m.ref || '')}</div>
-  </div>
-  <div class="formgrid" style="margin-top:16px;">
-    <div><label>Nueva fecha</label><input id="emDate" type="date" class="field" value="${oldDateStr}"></div>
-    <div><label>Nueva referencia</label><input id="emRef" class="field" value="${v14Text(m.ref || '')}"></div>
-  </div>
-  <div class="alert" style="margin-top:16px;"><b>Aviso:</b> Guardar los cambios actualizará la fecha y referencia para los productos asociados a este movimiento.</div>
-  <div class="right" style="margin-top:16px">
-    <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-    <button class="btn btn-primary" onclick="saveEditMovement('${m.id}')">Guardar corrección</button>
-  </div>`);
-}
-
-function saveEditMovement(id) {
-  let m = db.movements.find(x => x.id === id);
-  if (!m) return closeModal();
-  let newDateStr = document.getElementById('emDate').value;
-  let newRef = document.getElementById('emRef').value;
-  
-  let newDate = newDateStr ? new Date(newDateStr + 'T12:00:00').toISOString() : m.date;
-  
-  let groupedMoves = m.operationId ? db.movements.filter(x => x.operationId === m.operationId) : [m];
-  groupedMoves.forEach(move => {
-    move.date = newDate;
-    move.ref = newRef;
-  });
-  
-  audit('Corrección', m.type, newRef, 'Fecha/Ref editada');
-  save();
-  closeModal();
-  renderAll();
-}
-renderMovementsV11=renderMovementsV16;
 
 
 
@@ -1975,7 +1717,7 @@ savePendingDispatchV11=function(orderId){
 // Anticipos nuevos: operationId + receiptNumber.
 saveWorkbenchAdvance=function(){
   let e=db.employees.find(x=>x.id===selectedEmployeeId);
-  if(!e)return toast('Seleccione un empleado.', 'error');
+  if(!e)return alert('Seleccione un empleado.');
 
   let rows=[...document.querySelectorAll('#wbAdvanceLines .line')],items=[];
   rows.forEach(r=>{
@@ -1983,7 +1725,7 @@ saveWorkbenchAdvance=function(){
         n=normalize(r.querySelector('.wbaPack').value,r.querySelector('.wbaUnit').value,p);
     if(n.total)items.push({p,n});
   });
-  if(!items.length)return toast('Agregue al menos un producto.', 'error');
+  if(!items.length)return alert('Agregue al menos un producto.');
 
   let shortages=items.filter(x=>x.n.total>Number(db.stock[x.p.id]||0)),justification='';
   if(shortages.length){
@@ -2081,7 +1823,7 @@ renderPrintArea=function(){
 };
 printCurrentDocument=function(){
   if(!currentPrintBody){
-    toast('No hay un documento preparado para imprimir.', 'error');
+    alert('No hay un documento preparado para imprimir.');
     return;
   }
   renderPrintArea();
@@ -2234,7 +1976,7 @@ showEmployeeReceipt=function(e,items,title,prefix,providedNumber=''){
   setPrintableDocument(title,body,'receipt');
 
   let area=document.getElementById('employeeReceiptArea');
-  if(!area)return toast('La operación se registró correctamente, pero no se encontró el área del comprobante.', 'error');
+  if(!area)return alert('La operación se registró correctamente, pero no se encontró el área del comprobante.');
 
   area.innerHTML=`<div class="card receipt-success">
     <div class="headrow">
@@ -2293,8 +2035,8 @@ function openShiftMaterials() {
   modal(`<div class="headrow"><h2>Nueva Carga de Materiales por Turno</h2><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
   <div class="formgrid">
     <div><label>Fletero</label><select id="smCarrier">${options}</select></div>
-    <div><label>Planchadas entregadas al fletero</label><input id="smPalletOut" class="field" type="number" min="0" value="0"></div>
-    <div><label>Planchadas devueltas por el fletero</label><input id="smPalletIn" class="field" type="number" min="0" value="0"></div>
+    <div><label>Pallets entregadas al fletero</label><input id="smPalletOut" class="field" type="number" min="0" value="0"></div>
+    <div><label>Pallets devueltas por el fletero</label><input id="smPalletIn" class="field" type="number" min="0" value="0"></div>
     <div><label>Chapadur entregado al fletero</label><input id="smChapOut" class="field" type="number" min="0" value="0"></div>
     <div><label>Chapadur devuelto por el fletero</label><input id="smChapIn" class="field" type="number" min="0" value="0"></div>
     <div class="span3"><label>Observaciones</label><input id="smNote" class="field"></div>
@@ -2309,7 +2051,7 @@ function openShiftMaterials() {
 
 function saveShiftMaterials() {
   let carrier = document.getElementById('smCarrier').value;
-  if (!carrier) return toast('Seleccione un fletero válido.', 'error');
+  if (!carrier) return alert('Seleccione un fletero válido.');
   
   addMaterialMove({
     fleteroId: carrier,
@@ -2329,40 +2071,3 @@ function saveShiftMaterials() {
   renderMaterials();
 }
 
-
-// --- TOAST NOTIFICATIONS ---
-function toast(msg, type = 'success') {
-    let container = document.getElementById('toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        document.body.appendChild(container);
-    }
-    let t = document.createElement('div');
-    t.className = `toast toast-${type}`;
-    t.innerHTML = msg;
-    container.appendChild(t);
-    setTimeout(() => {
-        t.classList.add('fade-out');
-        setTimeout(() => t.remove(), 300);
-    }, 3000);
-}
-
-// --- CUSTOM CONFIRM MODAL ---
-function customConfirm(msg, onConfirm) {
-    let html = `
-    <div class="headrow">
-        <div><h2>Confirmación</h2></div>
-        <button class="btn btn-secondary" onclick="closeModal()">✖</button>
-    </div>
-    <div style="margin: 16px 0; font-size: 16px;">${msg}</div>
-    <div class="right" style="margin-top: 24px;">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-danger" id="btnConfirmAction">Aceptar</button>
-    </div>`;
-    modal(html);
-    document.getElementById('btnConfirmAction').onclick = () => {
-        closeModal();
-        if (onConfirm) onConfirm();
-    };
-}

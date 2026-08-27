@@ -113,22 +113,30 @@ function fmtDate(x){if(typeof x==='string'&&x.length===10&&x.indexOf('-')===4){l
 function uid(p='id'){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function fillLoginUsers(){
  let select=document.getElementById('loginUser');if(!select)return;
- let users=(db.users&&db.users.length?db.users:DEMO.users).filter(u=>u.active!==false);
+ let users=(db.users&&db.users.length?db.users:[]).filter(u=>u.active!==false);
  if(users.length)select.innerHTML=users.map(u=>`<option value="${u.id}">${u.displayName} (${u.username})</option>`).join('');
 }
 function doLogin(){
  let userEl=document.getElementById('loginUser');
  let passwordEl=document.getElementById('loginPassword');
  let shiftEl=document.getElementById('loginShift');
- let users=(db.users&&db.users.length?db.users:DEMO.users);
+ let users=(db.users&&db.users.length?db.users:[]);
  let u=users.find(x=>x.id===userEl.value&&x.active!==false);
- if(!u||u.password!==passwordEl.value)return toast('Usuario o clave incorrectos.', 'error');
+ if(!u||u.password!==passwordEl.value)return alert('Usuario o clave incorrectos.');
  session={userId:u.id,user:u.displayName,username:u.username,shift:shiftEl.value};
  safeSet(sessionStorage,'talcaSession',JSON.stringify(session));start()
 }
 function logout(){safeRemove(sessionStorage,'talcaSession');location.reload()}
-function changeShift(){let n=prompt('Turno activo (Mañana o Tarde):',session.shift);if(n&&['mañana','tarde'].includes(n.toLowerCase())){session.shift=n[0].toUpperCase()+n.slice(1).toLowerCase();safeSet(sessionStorage,'talcaSession',JSON.stringify(session));start()}}
-function start(){login.classList.add('hidden');app.classList.remove('hidden');sessionBadge.textContent=session.user+' · '+session.shift;todayText.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});if(!localStorage.getItem('wiped_v17')){db.orders=[];db.movements=[];db.materialMoves=[];db.counts=[];db.audit=[];for(let k in db.stock)db.stock[k]=0;localStorage.setItem('wiped_v17','true');save();toast('Base de datos limpiada y lista para v1.7', 'error')}renderAll()}
+function changeShift(){
+  modal(`<div class="headrow"><div><h2>Cambiar turno</h2><div class="muted">Seleccione el turno activo.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="formgrid"><select id="shiftSelect" class="field"><option value="Mañana" ${session.shift==='Mañana'?'selected':''}>Mañana</option><option value="Tarde" ${session.shift==='Tarde'?'selected':''}>Tarde</option></select></div><div class="right"><button class="btn btn-primary" onclick="confirmShift()">Guardar</button></div>`);
+  window.confirmShift = function() {
+    session.shift = document.getElementById('shiftSelect').value;
+    safeSet(sessionStorage,'talcaSession',JSON.stringify(session));
+    closeModal();
+    start();
+  };
+}
+function start(){login.classList.add('hidden');app.classList.remove('hidden');sessionBadge.textContent=session.user+' · '+session.shift;todayText.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});renderAll()}
 document.addEventListener('DOMContentLoaded',()=>{
  fillLoginUsers();
  let warning=document.getElementById('mobileFileWarning');
@@ -152,7 +160,7 @@ document.addEventListener('DOMContentLoaded',()=>{
        if (text.includes('guardar') || text.includes('confirmar') || text.includes('generar') || text.includes('despachar')) {
          e.stopPropagation();
          e.preventDefault();
-         toast('Acción bloqueada preventivamente: No tienes conexión a internet. Espera a que desaparezca el cartel rojo para evitar sobreescribir y perder datos de otros usuarios.', 'error');
+         alert('Acción bloqueada preventivamente: No tienes conexión a internet. Espera a que desaparezca el cartel rojo para evitar sobreescribir y perder datos de otros usuarios.');
        }
      }
    }
@@ -194,7 +202,7 @@ function modal(content){
  let dialogEl=document.getElementById('dialog');
  let modalEl=document.getElementById('modal');
  if(!dialogEl||!modalEl){
-   toast('No se pudo abrir el comprobante por un error de interfaz.', 'error');
+   alert('No se pudo abrir el comprobante por un error de interfaz.');
    return;
  }
  dialogEl.innerHTML=content;
@@ -210,13 +218,13 @@ function employeeOptions(){return db.employees.filter(e=>e.active).map(e=>`<opti
 function normalize(packs,units,prod){let total=Number(packs||0)*prod.pack+Number(units||0);return {total,packs:Math.floor(total/prod.pack),units:total%prod.pack}}
 var v1StockUnit = 'fardos';
 function toggleStockUnit() {
-  v1StockUnit = v1StockUnit === 'fardos' ? 'planchadas' : 'fardos';
+  v1StockUnit = v1StockUnit === 'fardos' ? 'pallets' : 'fardos';
   let btn = document.getElementById('stockUnitToggle');
-  if (btn) btn.innerText = v1StockUnit === 'fardos' ? 'Ver en Planchadas' : 'Ver en Fardos';
+  if (btn) btn.innerText = v1StockUnit === 'fardos' ? 'Ver en Pallets' : 'Ver en Fardos';
   if(typeof renderStockV1 === 'function') renderStockV1();
 }
 function equivalent(total, prod) {
-  if (typeof v1StockUnit !== 'undefined' && v1StockUnit === 'planchadas') {
+  if (typeof v1StockUnit !== 'undefined' && v1StockUnit === 'pallets') {
     let perPallet = prod.pack * (prod.perCut || 20) * (prod.cuts || 4);
     if (perPallet > 0) {
       let pallets = Math.floor(total / perPallet);

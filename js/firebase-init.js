@@ -11,11 +11,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const firestoreDb = firebase.firestore();
 try {
-  if (typeof firebase.firestore.persistentLocalCache === 'function') {
-    firestoreDb.settings({ cache: firebase.firestore.persistentLocalCache() });
-  } else {
-    firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
-  }
+  firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
 } catch(e) {
   console.warn('Sync persistence error:', e);
 }
@@ -68,11 +64,11 @@ function safeJSON(value,fallback=null){
 }
 function load(){
  let x=safeGet(localStorage,'talcaExpV02')||safeGet(localStorage,'talcaExpV01');
- let data=safeJSON(x,null)||clone(DEMO);
- data.users=data.users||clone(DEMO.users);
+ let data=safeJSON(x,null)||{users:[],products:PRODUCT_SEED,fleteros:[],employees:[],stock:{},orders:[],movements:[],materialMoves:[],counts:[],audit:[],counters:{CE:0,AE:0}};
+ data.users=data.users||[];
  data.counters=data.counters||{CE:0,AE:0};
  data.audit=data.audit||[];
- data.products=data.products||clone(DEMO.products);
+ data.products=data.products||PRODUCT_SEED;
  data.fleteros=data.fleteros||[];
  data.employees=data.employees||[];
  data.stock=data.stock||{};

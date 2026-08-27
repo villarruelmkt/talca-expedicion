@@ -167,7 +167,7 @@ function generateShiftSummary(){
  let byType={};moves.forEach(m=>byType[m.type]=(byType[m.type]||0)+1);
  let body=`<h1>Resumen de turno</h1><p><b>Fecha:</b> ${today} · <b>Turno:</b> ${session.shift} · <b>Encargado:</b> ${session.user}</p>
  <h2>Movimientos</h2><table><thead><tr><th>Tipo</th><th>Cantidad de registros</th></tr></thead><tbody>${Object.entries(byType).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</tbody></table>
- <h2>Materiales</h2><p>Planchadas entregadas: ${mats.reduce((s,m)=>s+m.palletOut,0)} · devueltas: ${mats.reduce((s,m)=>s+m.palletIn,0)}</p><p>Chapadur entregado: ${mats.reduce((s,m)=>s+m.chapOut,0)} · devuelto: ${mats.reduce((s,m)=>s+m.chapIn,0)}</p>
+ <h2>Materiales</h2><p>Pallets entregadas: ${mats.reduce((s,m)=>s+m.palletOut,0)} · devueltas: ${mats.reduce((s,m)=>s+m.palletIn,0)}</p><p>Chapadur entregado: ${mats.reduce((s,m)=>s+m.chapOut,0)} · devuelto: ${mats.reduce((s,m)=>s+m.chapIn,0)}</p>
  <h2>Pendientes</h2><p>Órdenes parciales: ${db.orders.filter(o=>o.status==='Parcial').length} · Cambios sin informar: ${db.orders.filter(o=>o.billing==='Pendiente de aviso').length}</p>`;
  setPrintableDocument('Resumen de turno',body);printCurrentDocument()
 }
