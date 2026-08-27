@@ -1,4 +1,41 @@
 // --- MODULE: USER INTERFACE (ROUTING & RENDER) ---
+// --- TOAST NOTIFICATIONS ---
+function toast(msg, type = 'success') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+    let t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.innerHTML = msg;
+    container.appendChild(t);
+    setTimeout(() => {
+        t.classList.add('fade-out');
+        setTimeout(() => t.remove(), 300);
+    }, 3000);
+}
+
+// --- CUSTOM CONFIRM MODAL ---
+function customConfirm(msg, onConfirm) {
+    let html = `
+    <div class="headrow">
+        <div><h2>Confirmación</h2></div>
+        <button class="btn btn-secondary" onclick="closeModal()">✖</button>
+    </div>
+    <div style="margin: 16px 0; font-size: 16px;">${msg}</div>
+    <div class="right" style="margin-top: 24px;">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-danger" id="btnConfirmAction">Aceptar</button>
+    </div>`;
+    modal(html);
+    document.getElementById('btnConfirmAction').onclick = () => {
+        closeModal();
+        if (onConfirm) onConfirm();
+    };
+}
+
 function renderAll(){
  if(!session)return;
  populateFilters();if(document.getElementById('employeeSearchResults')){searchEmployees();if(selectedEmployeeId)renderEmployeeWorkbench();}
@@ -1090,51 +1127,8 @@ function saveProductionV14(){
 }
 
 // Alias y configuración de productos.
-addProduct=function(){
-  let id=(prompt('Código del producto:')||'').trim();if(!id)return;
-  if(db.products.some(p=>p.id===id))return alert('Ese código ya existe.');
-  let name=(prompt('Nombre del producto:')||'').trim();if(!name)return;
-  let alias=(prompt('Alias de búsqueda (ej.: CO3):','')||'').trim().toUpperCase();
-  if(alias&&db.products.some(p=>v14SearchNorm(p.alias)===v14SearchNorm(alias)))return alert('Ese alias ya existe.');
-  let pack=Number(prompt('Unidades por fardo:','6'));if(!pack)return;
-  let perCut=Number(prompt('Fardos por corte:','20'));if(!perCut)return;
-  let cuts=Number(prompt('Cortes por pallet:','4'));if(!cuts)return;
-  let minStock=Number(prompt('Stock mínimo en fardos:','0')||0),criticalStock=Number(prompt('Stock crítico en fardos:','0')||0);
-  db.products.push({id,name,alias,pack,perCut,cuts,minStock,criticalStock,active:true,employeeBenefit:false});
-  db.stock[id]=0;v1EnsureBucket(id);audit('Alta','Producto',id,`${name} · ${alias}`);save();
-};
-editProduct=function(id){
-  let p=db.products.find(x=>x.id===id);if(!p)return;
-  let newId=(prompt('Código alfanumérico:',p.id)||'').trim();if(!newId)return;
-  if(newId!==p.id&&db.products.some(x=>x.id===newId))return alert('Ese código ya existe.');
-  let alias=(prompt('Alias de búsqueda:',p.alias||'')||'').trim().toUpperCase();
-  if(alias&&db.products.some(x=>x.id!==p.id&&v14SearchNorm(x.alias)===v14SearchNorm(alias)))return alert('Ese alias ya existe.');
-  let old=p.id;
-  p.name=(prompt('Nombre:',p.name)||p.name).trim();
-  p.alias=alias;p.pack=Number(prompt('Unidades por fardo:',String(p.pack))||p.pack);
-  p.perCut=Number(prompt('Fardos por corte:',String(p.perCut))||p.perCut);
-  p.cuts=Number(prompt('Cortes por pallet:',String(p.cuts))||p.cuts);
-  p.minStock=Number(prompt('Stock mínimo en fardos:',String(p.minStock||0))||0);
-  p.criticalStock=Number(prompt('Stock crítico en fardos:',String(p.criticalStock||0))||0);
-  p.employeeBenefit=confirm('Aceptar para habilitar este producto para el beneficio de empleados.');
-  p.active=confirm('Aceptar para dejar el producto ACTIVO. Cancelar para marcarlo INACTIVO.');
-  if(newId!==old){
-    p.id=newId;
-    db.stock[newId]=db.stock[old]||0;delete db.stock[old];
-    db.stockBuckets=db.stockBuckets||{};
-    db.stockBuckets[newId]=db.stockBuckets[old]||{physical:db.stock[newId]||0,preventa:0,distriC:0,distriInterior:0,sinCodificar:0,oesteMendoza:0,oesteJeremias:0};
-    delete db.stockBuckets[old];
-    (db.movements||[]).forEach(m=>{if(m.productId===old)m.productId=newId});
-    (db.orders||[]).forEach(o=>{
-      (o.requestLines||[]).forEach(l=>{if(l.productId===old)l.productId=newId});
-      (o.deliveries||[]).forEach(d=>(d.lines||[]).forEach(l=>{
-        if(l.productId===old)l.productId=newId;
-        if(l.sourceProductId===old)l.sourceProductId=newId;
-      }));
-    });
-  }
-  save();
-};
+
+
 function v14RenderProductConfig(){
   let list=document.getElementById('productsList');if(!list)return;
   list.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
@@ -1236,9 +1230,9 @@ function v14ConfirmDraftProduct(){
     if(matches.length)v14DraftProductId=matches[0].id;
   }
   let p=db.products.find(x=>x.id===v14DraftProductId);
-  if(!p)return alert('Seleccione un producto válido.');
+  if(!p)return toast('Seleccione un producto válido.', 'error');
   let n=normalize(document.getElementById('v14DraftPack').value,document.getElementById('v14DraftUnit').value,p);
-  if(!n.total)return alert('Ingrese una cantidad en fardos o unidades.');
+  if(!n.total)return toast('Ingrese una cantidad en fardos o unidades.', 'error');
   let existing=document.querySelector(`#v14ConfirmedLines .v14-confirmed-line[data-product-id="${CSS.escape(p.id)}"]`);
   let immediate=document.getElementById('v13OrderType').value==='immediate';
   if(existing){
