@@ -4,7 +4,7 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "build": "npx terser js/firebase-init.js js/store.js js/settings.js js/employee.js js/stock.js js/orders.js js/print.js js/ui.js js/ui_orders.js js/ui_movements.js -o app.min.js -c -m",
+    "minify": "npx terser js/firebase-init.js js/store.js js/settings.js js/employee.js js/stock.js js/orders.js js/print.js js/ui.js js/ui_orders.js js/ui_movements.js -o app.min.js -c -m",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
