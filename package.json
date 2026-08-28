@@ -87,6 +87,7 @@
     "isexe": "^2.0.0",
     "jose": "^5.10.0",
     "js-string-escape": "^1.0.1",
+    "jsdom": "^30.0.1",
     "levn": "^0.3.0",
     "libphonenumber-js": "^1.13.11",
     "math-intrinsics": "^1.1.0",

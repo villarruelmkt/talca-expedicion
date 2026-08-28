@@ -1,3 +1,16 @@
+function renderAll() {
+  if (typeof renderRecentV11 === 'function') renderRecentV11();
+  if (typeof renderProductsConfigV11 === 'function') renderProductsConfigV11();
+  if (typeof renderEmployeeWorkbench === 'function') renderEmployeeWorkbench();
+  if (typeof renderMaterials === 'function') renderMaterials();
+  if (typeof renderOrdersV16 === 'function') renderOrdersV16();
+  if (typeof renderMovementsV16 === 'function') renderMovementsV16();
+  if (typeof renderPrintArea === 'function') renderPrintArea();
+  if (typeof renderPendingV13 === 'function') renderPendingV13();
+  if (typeof renderStockV1 === 'function') renderStockV1();
+}
+window.renderAll = renderAll;
+
 function saveNewOrderV11(){
  let num=document.getElementById('v11Number').value.trim(),type=document.getElementById('v11PendingType').value,lines=getNewOrderLinesV11();
  if(!num||!lines.length||!lines.some(l=>l.requestedTotal>0))return alert('Complete el número y al menos una cantidad solicitada.');
