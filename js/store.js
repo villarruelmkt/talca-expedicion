@@ -1,6 +1,44 @@
 // --- MODULE: GLOBAL STATE & CORE UTILS ---
 let db=load();
 
+const V1_SCHEMA_VERSION=1;
+function v1EnsureBucket(pid){
+  db.stockBuckets=db.stockBuckets||{};
+  db.stockBuckets[pid]=Object.assign({physical:db.stock[pid]||0,preventa:0,distriC:0,distriInterior:0,sinCodificar:0,oesteMendoza:0,oesteJeremias:0},db.stockBuckets[pid]||{});
+  db.stockBuckets[pid].physical=db.stock[pid]||0;return db.stockBuckets[pid];
+}
+function v1Migrate(){
+  let changed=false;
+  db.schemaVersion=V1_SCHEMA_VERSION;
+  db.stockBuckets=db.stockBuckets||{};
+  (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
+  db.employees=db.employees||[];
+  if(!db.employees.length&&typeof V1_EMPLOYEE_SEED!=='undefined'){
+    db.employees=JSON.parse(JSON.stringify(V1_EMPLOYEE_SEED));
+    changed=true;
+  } else if(typeof V1_EMPLOYEE_SEED!=='undefined'){
+    const legs=new Set(db.employees.map(e=>String(e.legajo)));
+    V1_EMPLOYEE_SEED.forEach(e=>{
+      if(!legs.has(String(e.legajo))){
+        db.employees.push(JSON.parse(JSON.stringify(e)));
+        changed=true;
+      }
+    });
+  }
+  if(!db.fleteros||!db.fleteros.length){
+    db.fleteros=clone(DEMO.fleteros);
+    changed=true;
+  }
+  if(!db.users||!db.users.length){
+    db.users=clone(DEMO.users);
+    changed=true;
+  }
+  if(changed){
+    safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+  }
+  return changed;
+}
+v1Migrate();
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
 let lastSyncedDb = {
@@ -14,16 +52,24 @@ docRef.onSnapshot((doc) => {
     // Stock y configuraciones toman el valor de la nube (última verdad)
     db.stock = cloudDb.stock || db.stock;
     db.stockBuckets = cloudDb.stockBuckets || db.stockBuckets;
-    db.products = cloudDb.products || db.products;
-    db.fleteros = cloudDb.fleteros || db.fleteros;
-    db.employees = cloudDb.employees || db.employees;
+    if (cloudDb.products && cloudDb.products.length) db.products = cloudDb.products;
+    if (cloudDb.fleteros && cloudDb.fleteros.length) db.fleteros = cloudDb.fleteros;
+    if (cloudDb.employees && cloudDb.employees.length) db.employees = cloudDb.employees;
+    if (cloudDb.users && cloudDb.users.length) db.users = cloudDb.users;
     
+    let needSave = v1Migrate();
     safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+    if (needSave) {
+      let cloneDoc = { ...db };
+      delete cloneDoc.audit; delete cloneDoc.movements; delete cloneDoc.orders; delete cloneDoc.materialMoves; delete cloneDoc.counts;
+      docRef.set(cloneDoc).catch(console.error);
+    }
   } else {
-    // Si no existe el documento maestro, lo creamos sin los arreglos pesados
-    let clone = { ...db };
-    delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
-    docRef.set(clone).catch(console.error);
+    // Si no existe el documento maestro, lo creamos con las colecciones base
+    v1Migrate();
+    let cloneDoc = { ...db };
+    delete cloneDoc.audit; delete cloneDoc.movements; delete cloneDoc.orders; delete cloneDoc.materialMoves; delete cloneDoc.counts;
+    docRef.set(cloneDoc).catch(console.error);
   }
   isFirebaseReady = true;
   try { if(typeof fillLoginUsers === 'function') fillLoginUsers(); } catch(e){}
