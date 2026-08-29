@@ -1,0 +1,183 @@
+﻿diff --git a/js/ui.js b/js/ui.js
+index bdd0535..9e7ed35 100644
+--- a/js/ui.js
++++ b/js/ui.js
+@@ -1,178 +1,3 @@
+-// --- MODULE: USER INTERFACE (ROUTING & RENDER) ---
+-// --- TOAST NOTIFICATIONS ---
+-function toast(msg, type = 'success') {
+-    let container = document.getElementById('toast-container');
+-    if (!container) {
+-        container = document.createElement('div');
+-        container.id = 'toast-container';
+-        document.body.appendChild(container);
+-    }
+-    let t = document.createElement('div');
+-    t.className = `toast toast-${type}`;
+-    t.innerHTML = msg;
+-    container.appendChild(t);
+-    setTimeout(() => {
+-        t.classList.add('fade-out');
+-        setTimeout(() => t.remove(), 300);
+-    }, 3000);
+-}
+-
+-// --- CUSTOM CONFIRM MODAL ---
+-function customConfirm(msg, onConfirm) {
+-    let html = `
+-    <div class="headrow">
+-        <div><h2>Confirmaci├│n</h2></div>
+-        <button class="btn btn-secondary" onclick="closeModal()">Ô£û</button>
+-    </div>
+-    <div style="margin: 16px 0; font-size: 16px;">${msg}</div>
+-    <div class="right" style="margin-top: 24px;">
+-        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+-        <button class="btn btn-danger" id="btnConfirmAction">Aceptar</button>
+-    </div>`;
+-    modal(html);
+-    document.getElementById('btnConfirmAction').onclick = () => {
+-        closeModal();
+-        if (onConfirm) onConfirm();
+-    };
+-}
+-
+-function renderAll(){
+- if(!session)return;
+- populateFilters();if(document.getElementById('employeeSearchResults')){searchEmployees();if(selectedEmployeeId)renderEmployeeWorkbench();}
+- let today=new Date().toISOString().slice(0,10);
+- 
+- let kO = document.getElementById('kOpen');
+- if(kO) kO.textContent=(db.orders||[]).filter(o=>o.pendingType==='administrative'||(v13IsOperational(o.pendingType)&&v11OrderOutstanding(o)>0)).length;
+- 
+- let kD = document.getElementById('kDeliveries');
+- if(kD) kD.textContent=(db.orders||[]).flatMap(o=>o.deliveries||[]).filter(d=>d.date.slice(0,10)===today).length;
+- 
+- let kA = document.getElementById('kAlerts');
+- if(kA) kA.textContent=(db.movements||[]).filter(m=>m.note&&m.date.slice(0,10)===today).length;
+- 
+- let kB = document.getElementById('kBilling');
+- if(kB) kB.textContent=(db.orders||[]).filter(o=>o.pendingType==='administrative').length;
+- 
+- if(typeof renderRecentV11 === 'function') renderRecentV11();
+- if(typeof v14RenderProductConfig === 'function') v14RenderProductConfig();
+- if(typeof renderOrdersV16 === 'function') renderOrdersV16();
+- if(typeof renderPendingV13 === 'function') renderPendingV13();
+- if(typeof renderMovementsV16 === 'function') renderMovementsV16();
+- if(typeof renderMaterials === 'function') renderMaterials();
+- if(typeof renderStockV1 === 'function') renderStockV1();
+- let legacyEmployeesBody=document.getElementById('employeesBody');
+- if(legacyEmployeesBody){
+-   legacyEmployeesBody.innerHTML=db.employees.map(e=>`<tr><td>${e.legajo}</td><td>${e.name} ${e.surname}</td><td>${e.active?'Activo':'Inactivo'}</td><td><b>${e.balance||0} fardos</b></td><td>${e.lastConsumption?fmtDate(e.lastConsumption):'Sin consumos'}</td></tr>`).join('');
+- }
+- renderPending();auditBody.innerHTML=[...(db.audit||[])].reverse().map(a=>`<tr><td>${fmtDate(a.date)}</td><td>${a.user}</td><td>${a.action}</td><td>${a.entity}</td><td>${a.ref}</td><td>${a.detail}</td></tr>`).join('');
+- countsBody.innerHTML=[...db.counts].reverse().map(c=>`<tr><td>${fmtDate(c.date)}</td><td>${c.shift}</td><td>${c.type}</td><td>${c.user}</td><td>${c.differences.length}</td><td>${c.status}</td></tr>`).join('');
+- let pending=[...db.counts].reverse().find(c=>c.type==='Cierre de turno'&&c.status==='Pendiente de corroboraci├│n'&&c.shift!==session.shift);
+- handoverAlert.innerHTML=pending?`<div class="alert"><b>Relevo pendiente.</b> ${pending.user} cerr├│ el turno ${pending.shift} con ${pending.differences.length} diferencias. <button class="btn btn-primary" onclick="corroborateCount('${pending.id}')">Corroborar recepci├│n</button></div>`:'';
+- usersList.innerHTML=db.users.map(u=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b><br><span class="muted">@${u.username} ┬À ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`).join('');
+- fleterosList.innerHTML=db.fleteros.map(f=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${f.name} ${f.surname||''}</b><br><span class="muted">${f.company||'Sin empresa indicada'}</span><div class="right"><button class="btn btn-secondary" onclick="editFletero('${f.id}')">Modificar</button></div></div>`).join('');
+- employeeConfigList.innerHTML=db.employees.map(e=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${e.legajo} ┬À ${e.name} ${e.surname}</b><br><span class="muted">${e.active?'Activo':'Inactivo'} ┬À Saldo beneficio: ${e.balance||0} fardos</span><div class="right"><button class="btn btn-secondary" onclick="editEmployee('${e.id}')">Modificar</button></div></div>`).join('');
+- productsList.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} ┬À ${p.name}</b><br><span class="muted">${p.pack} un/fardo ┬À ${p.perCut} fardos/corte ┬À ${p.cuts} cortes/pallet</span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('');
+-}
+-
+-// ===== Talca Expedici├│n v1.1: migraci├│n, empleados, stock pendiente y backups =====
+-const V1_EMPLOYEE_SEED=[{"id": "emp_10054", "legajo": "10054", "name": "JOSE ANTONIO", "surname": "LOPEZ MENA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10055", "legajo": "10055", "name": "FACUNDO", "surname": "MOLINA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10101", "legajo": "10101", "name": "SERGIO OMAR", "surname": "FERNANDEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10102", "legajo": "10102", "name": "CLAUDIA INES", "surname": "LIZONDO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10103", "legajo": "10103", "name": "ADOLFO HEN", "surname": "LI", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10112", "legajo": "10112", "name": "GONZALO", "surname": "LOPEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10113", "legajo": "10113", "name": "CLAUDIA", "surname": "ALBORNOZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10117", "legajo": "10117", "name": "MONICA LILIANA", "surname": "JIMENEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10118", "legajo": "10118", "name": "MARCO ANTONIO", "surname": "CORTEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10419", "legajo": "10419", "name": "JORGE RAUL", "surname": "ARAOZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10426", "legajo": "10426", "name": "HUGO LUIS", "surname": "PORTAL", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10430", "legajo": "10430", "name": "CARLOS", "surname": "FLORES", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10432", "legajo": "10432", "name": "SERGIO", "surname": "GOMEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10437", "legajo": "10437", "name": "ALEJANDRO A", "surname": "FERLATTI", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10439", "legajo": "10439", "name": "BARTOLOME", "surname": "MORALES", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10440", "legajo": "10440", "name": "ALDO GONZALO", "surname": "PLAZA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10441", "legajo": "10441", "name": "DIEGO", "surname": "LIENDRO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10442", "legajo": "10442", "name": "EDGAR", "surname": "QUARTIN", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10711", "legajo": "10711", "name": "ANDRES RICARDO", "surname": "GUAYMAS", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10725", "legajo": "10725", "name": "CARLOS S", "surname": "BARBOZA E", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10754", "legajo": "10754", "name": "MARIA VICTORIA", "surname": "LUI VEGAS", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10902", "legajo": "10902", "name": "JOSE LUIS", "surname": "JUAREZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10903", "legajo": "10903", "name": "MARCOS", "surname": "BORDON", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10906", "legajo": "10906", "name": "JOAQUIN", "surname": "CONDE", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10907", "legajo": "10907", "name": "EXEQUIEL", "surname": "BARCELO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10908", "legajo": "10908", "name": "HERNAN", "surname": "BALDIVIEZO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_10909", "legajo": "10909", "name": "ISAAC", "surname": "RODRIGUEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11002", "legajo": "11002", "name": "VICTOR HUGO", "surname": "RUIZ BAREA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11004", "legajo": "11004", "name": "AGUSTIN", "surname": "CARRERAS", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11005", "legajo": "11005", "name": "VICTOR HUGO", "surname": "CHUNGARA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11007", "legajo": "11007", "name": "ISMAEL", "surname": "FIGUEROA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11008", "legajo": "11008", "name": "ORLANDO DARIO", "surname": "LOPEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11009", "legajo": "11009", "name": "CARLOS GUALBERTO", "surname": "ROMERO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11010", "legajo": "11010", "name": "SERGIO ALEJANDRO", "surname": "LOPEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11011", "legajo": "11011", "name": "RICARDO CESAR", "surname": "OSORES", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11012", "legajo": "11012", "name": "SANTOS P", "surname": "ALBERTO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11013", "legajo": "11013", "name": "CHRISTIAN", "surname": "PALAVECINO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11018", "legajo": "11018", "name": "RAUL OBDULIO", "surname": "ARIAS", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11021", "legajo": "11021", "name": "JUAN CARLOS", "surname": "CORTEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11022", "legajo": "11022", "name": "JORGE LUIS", "surname": "AVILA OLGUIN", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11026", "legajo": "11026", "name": "SERGIO ROLANDO", "surname": "SARDINA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11027", "legajo": "11027", "name": "RICHARD", "surname": "CUELLAR", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11029", "legajo": "11029", "name": "NESTOR RAMON", "surname": "LOPEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11030", "legajo": "11030", "name": "NELSON", "surname": "GARIN RODRIGUEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11031", "legajo": "11031", "name": "OSCAR ALBERTO", "surname": "GIRAUDO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11034", "legajo": "11034", "name": "GUSTAVO ADRIAN", "surname": "ORTEGA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11035", "legajo": "11035", "name": "FRANCISCO GABINO", "surname": "SULCA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11037", "legajo": "11037", "name": "JOSE LUIS", "surname": "ARCE", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11039", "legajo": "11039", "name": "ROMUALDO ABEL", "surname": "CRUZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11041", "legajo": "11041", "name": "RAUL", "surname": "CRUZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11046", "legajo": "11046", "name": "FREDY ARIEL", "surname": "MORALES", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11048", "legajo": "11048", "name": "PABLO JESUS", "surname": "VILTE", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11050", "legajo": "11050", "name": "JESUS HUGO", "surname": "LOPEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11054", "legajo": "11054", "name": "JORGE EDUARDO", "surname": "GUANCA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11062", "legajo": "11062", "name": "OSCAR RENE", "surname": "VILTE", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11063", "legajo": "11063", "name": "RUFINO", "surname": "LEMOS", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11071", "legajo": "11071", "name": "DIEGO", "surname": "RIOS", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11072", "legajo": "11072", "name": "DANIEL", "surname": "SARDINAS", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11078", "legajo": "11078", "name": "RAUL LEONARDO", "surname": "ORELLANA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11079", "legajo": "11079", "name": "CARLOS CESAR", "surname": "ALVAREZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11082", "legajo": "11082", "name": "ALBERTO", "surname": "REALES", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11088", "legajo": "11088", "name": "ADRIAN", "surname": "TAPIA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11090", "legajo": "11090", "name": "DELFIN", "surname": "RODRIGUEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11095", "legajo": "11095", "name": "JUAN", "surname": "FERNANDEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11096", "legajo": "11096", "name": "FACUNDO", "surname": "JODOR", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11104", "legajo": "11104", "name": "LUCAS", "surname": "CHILIGUAY", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11503", "legajo": "11503", "name": "RENE ANICETO", "surname": "GRAMAJO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11602", "legajo": "11602", "name": "DANIEL GUALBERTO", "surname": "BARRO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11607", "legajo": "11607", "name": "JOSE LUIS", "surname": "MARTINEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11608", "legajo": "11608", "name": "JOSE", "surname": "CRUZ YEBARA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11609", "legajo": "11609", "name": "CARLOS MARTIN", "surname": "BRAVO", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11610", "legajo": "11610", "name": "ABEL RAMIRO", "surname": "CRUZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11611", "legajo": "11611", "name": "ESTEBAN MISAEL", "surname": "MARTINEZ", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11613", "legajo": "11613", "name": "DIEGO PAUL", "surname": "CORDOBA", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11615", "legajo": "11615", "name": "JUAN", "surname": "CABELLER PONCE", "active": true, "balance": 0, "lastCredit": ""}, {"id": "emp_11950", "legajo": "11950", "name": "FELIX A", "surname": "PATI├æO FERNANDEZ", "active": true, "balance": 0, "lastCredit": ""}];
+-const V1_SCHEMA_VERSION=1;
+-function v1SafeGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+-function v1SafeSet(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
+-function v1Backup(label='Respaldo manual'){
+-  const raw=JSON.stringify(db);let arr=[];try{arr=JSON.parse(v1SafeGet('talcaExpBackups')||'[]')}catch(e){}
+-  arr.push({id:'bk_'+Date.now(),date:new Date().toISOString(),label,data:raw});if(arr.length>10)arr=arr.slice(-10);v1SafeSet('talcaExpBackups',JSON.stringify(arr));return arr.at(-1)
+-}
+-function v1EnsureBucket(pid){
+-  db.stockBuckets=db.stockBuckets||{};
+-  db.stockBuckets[pid]=Object.assign({physical:db.stock[pid]||0,preventa:0,distriC:0,distriInterior:0,sinCodificar:0,oesteMendoza:0,oesteJeremias:0},db.stockBuckets[pid]||{});
+-  db.stockBuckets[pid].physical=db.stock[pid]||0;return db.stockBuckets[pid]
+-}
+-
+-
+-
+-function v1PendingTotal(b){return ['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias'].reduce((s,k)=>s+Number(b[k]||0),0)}
+-function v1Pct(b){let t=v1PendingTotal(b);if(t===0)return null;let d=v14DeliverableStock(b);if(d===0)return -100;return ((d-t)/d)*100}
+-function v1State(b){let t=v1PendingTotal(b);if(t===0)return 'Sin pendientes';return Number(b.physical||0)>=t?'Disponible':'Insuficiente'}
+-function v1PendingField(label,key,total,p){let n=normalize(0,total,p);return `<div><label>${label}</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input id="${key}Pack" class="field" type="number" min="0" value="${n.packs}" placeholder="Fardos"><input id="${key}Unit" class="field" type="number" min="0" value="${n.units}" placeholder="Unidades"></div></div>`}
+-function openPendingEditorV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid);modal(`<div class="headrow"><div><h2>Pendientes ┬À ${p.name}</h2><div class="muted">Ingrese fardos y unidades sueltas.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="formgrid">${v1PendingField('Preventa pendiente','preventa',b.preventa,p)}${v1PendingField('Distri C pendiente','distriC',b.distriC,p)}${v1PendingField('Distri Interior','distriInterior',b.distriInterior,p)}${v1PendingField('Sin codificar','sinCodificar',b.sinCodificar,p)}${v1PendingField('Oeste Mendoza pendiente','oesteMendoza',b.oesteMendoza,p)}${v1PendingField('Oeste Jerem├¡as pendiente','oesteJeremias',b.oesteJeremias,p)}</div><label>Justificaci├│n / referencia</label><textarea id="v1PendingNote"></textarea><div class="right"><button class="btn btn-primary" onclick="savePendingV1('${pid}')">Guardar pendientes</button></div>` )}
+-function savePendingV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid),before=JSON.parse(JSON.stringify(b));['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias'].forEach(k=>{b[k]=normalize(document.getElementById(k+'Pack').value,document.getElementById(k+'Unit').value,p).total});audit('Modificaci├│n','Pendientes',pid,JSON.stringify({before,after:b,note:document.getElementById('v1PendingNote').value}));save();closeModal();renderStockV1()}
+-
+-function exportStockV1CSV(){let rows=[['C├│digo','Producto','Stock f├¡sico','Preventa','Distri C','Distri Interior','Sin codificar','Oeste Mendoza','Oeste Jerem├¡as','Total pendiente','% disponible']];(db.products||[]).filter(p=>p.active!==false).forEach(p=>{let b=v1EnsureBucket(p.id),t=v1PendingTotal(b);rows.push([p.id,p.name,equivalent(b.physical,p),equivalent(b.preventa,p),equivalent(b.distriC,p),equivalent(b.distriInterior,p),equivalent(b.sinCodificar,p),equivalent(b.oesteMendoza,p),equivalent(b.oesteJeremias,p),equivalent(t,p),v1Pct(b).toFixed(1)+'%'])});downloadCSV('stock_y_pendientes.csv',rows)}
+-function exportBackupV1(){let payload={app:'Talca Expedici├│n',schemaVersion:V1_SCHEMA_VERSION,exportedAt:new Date().toISOString(),data:db},a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.download='talca_backup_'+new Date().toISOString().replaceAll(':','-')+'.json';a.click();URL.revokeObjectURL(a.href)}
+-function importBackupV1(input){let file=input.files?.[0];if(!file)return;let r=new FileReader();r.onload=()=>{try{let payload=JSON.parse(r.result),data=payload.data||payload;if(!data.products||!data.stock)throw new Error('Formato inv├ílido');v1Backup('Antes de importar respaldo');db=data;v1Migrate();save();alert('Respaldo importado correctamente')}catch(e){alert('No se pudo importar: '+e.message)}};r.readAsText(file)}
+-function showBackupManagerV1(){let arr=[];try{arr=JSON.parse(v1SafeGet('talcaExpBackups')||'[]')}catch(e){};modal(`<div class="headrow"><div><h2>Copias de seguridad</h2><div class="muted">La migraci├│n a v1.0 crea un respaldo autom├ítico.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="toolbar"><button class="btn btn-primary" onclick="exportBackupV1()">Descargar respaldo</button><label class="btn btn-secondary">Importar respaldo<input type="file" accept=".json" hidden onchange="importBackupV1(this)"></label></div><div style="margin-top:16px">${arr.length?arr.slice().reverse().map(b=>`<div class="card" style="margin-bottom:8px"><b>${b.label}</b><br><span class="muted">${fmtDate(b.date)}</span></div>`).join(''):'<span class="muted">No hay respaldos autom├íticos.</span>'}</div>` )}
+-
+-
+-
+-
+-
+-// ===== Talca Expedici├│n v1.1: ├│rdenes pendientes, beneficios, rebotes y derrame =====
+-const V11_SCHEMA_VERSION=2;
+-const V11_BENEFIT_CODES=new Set(['5670','5675','5680','5685','5690','8670']);
+-const V11_PENDING_LABELS={
+- preventa:'Preventa pendiente',distriC:'Distri C pendiente',distriInterior:'Distri Interior',
+- sinCodificar:'Sin codificar',oesteMendoza:'Oeste Mendoza pendiente',oesteJeremias:'Oeste Jerem├¡as pendiente',
+- immediate:'Salida inmediata',legacy:'Operaci├│n hist├│rica'
+-};
+-function v11PendingOptions(selected=''){
+- return ['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias','immediate']
+-  .map(k=>`<option value="${k}" ${selected===k?'selected':''}>${V11_PENDING_LABELS[k]}</option>`).join('')
+-}
+-
+-
+-
+-function v11IncreasePending(type,productId,total){if(!type||type==='immediate'||!total)return;let b=v1EnsureBucket(productId);b[type]=Number(b[type]||0)+Number(total||0)}
+-function v11DecreasePending(type,productId,total){if(!type||type==='immediate'||!total)return 0;let b=v1EnsureBucket(productId),applied=Math.min(Number(b[type]||0),Number(total||0));b[type]=Math.max(0,Number(b[type]||0)-applied);return applied}
+-function v11OrderRequested(o){return (o.requestLines||[]).reduce((s,l)=>s+Number(l.total||0),0)}
+-function v11OrderResolved(o){return (o.requestLines||[]).reduce((s,l)=>s+Math.min(Number(l.total||0),Number(l.resolvedTotal||0)),0)}
+-function v11OrderOutstanding(o){return Math.max(0,v11OrderRequested(o)-v11OrderResolved(o))}
+-function v11DeliveredTotal(o){return (o.deliveries||[]).reduce((s,d)=>s+(d.lines||[]).reduce((a,l)=>a+Number(l.total||0),0),0)}
+-function v11LineOutstanding(l){return Math.max(0,Number(l.total||0)-Number(l.resolvedTotal||0))}
+-function v11FindRequestLine(o,sourceProductId){return (o.requestLines||[]).find(l=>l.productId===sourceProductId&&v11LineOutstanding(l)>0)||(o.requestLines||[]).find(l=>l.productId===sourceProductId)}
+-function v11OrderStatus(o){
+- if(o.pendingType==='immediate')return o.status||'Despachada';
+- let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o),sub=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));
+- if(outstanding===0)return 'Despachada';
+- if(sub)return 'Pendiente de Facturaci├│n';
+- if(delivered>0)return 'Parcialmente despachada';
+- return 'Pendiente de despacho'
+-}
+-function v11ProductSelect(selected=''){return db.products.filter(p=>p.active!==false).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${p.id} ┬À ${p.name}</option>`).join('')}
+-
+-
+-
+-addOrderLine=function(productId=''){
+- let box=document.getElementById('orderLines');if(!box)return;
+- let d=document.createElement('div');d.className='line v11-new-order-line';
+- d.innerHTML=`<div class="prod"><label>Producto</label><select class="liProd" onchange="recalcOrderV11()">${v11ProductSelect(productId)}</select></div>
+- <div><label>Solic. fardos</label><input class="field liReqPack" type="number" min="0" value="0" oninput="syncRequestedV11(this);recalcOrderV11()"></div>
+- <div><label>Solic. unidades</label><input class="field liReqUnit" type="number" min="0" value="0" oninput="syncRequestedV11(this);recalcOrderV11()"></div>
+- <div class="v11-actual"><label>Entreg. fardos</label><input class="field liPack" type="number" min="0" value="0" oninput="this.dataset.touched='1';recalcOrderV11()"></div>
+- <div class="v11-actual"><label>Entreg. unidades</label><input class="field liUnit" type="number" min="0" value="0" oninput="this.dataset.touched='1';recalcOrderV11()"></div>
+- <button class="btn btn-danger" onclick="this.parentElement.remove();recalcOrderV11()">Quitar</button>`;
+- box.appendChild(d);recalcOrderV11()
+-};
+-function syncRequestedV11(el){let r=el.closest('.line'),isPack=el.classList.contains('liReqPack'),target=r.querySelector(isPack?'.liPack':'.liUnit');if(!target.dataset.touched)target.value=el.value}
+-addProductByCode=function(){let input=document.getElementById('quickProductCode'),q=(input?.value||'').trim().toLowerCase();if(!q)return;let matches=db.products.filter(p=>p.active!==false&&(p.id.toLowerCase()===q||p.name.toLowerCase().includes(q)));if(!matches.length)return toast('No se encontr├│ el producto.', 'error');if(matches.length>1)return toast('Hay varias coincidencias; escriba el c├│digo exacto.', 'error');addOrderLine(matches[0].id);input.value='';input.focus()};
+-function toggleOrderModeV11(){
+- let type=document.getElementById('v11PendingType')?.value,immediate=type==='immediate';
+- document.querySelectorAll('.v11-actual').forEach(x=>x.classList.toggle('hidden',!immediate));
+- document.getElementById('v11ImmediateMaterials')?.classList.toggle('hidden',!immediate);
+- let info=document.getElementById('v11ModeInfo');if(info)info.innerHTML=immediate?'<b>Salida inmediata:</b> se descontar├í del stock f├¡sico lo realmente entregado y no se modificar├í ning├║n pendiente.':`<b>${V11_PENDING_LABELS[type]}:</b> se sumar├í la cantidad solicitada. El stock f├¡sico no cambia hasta confirmar la salida.`;
+- let btn=document.getElementById('v11SaveOrderBtn');if(btn)btn.textContent=immediate?'Confirmar orden y salida':'Registrar orden pendiente';
+- recalcOrderV11()
+-}
+-function getNewOrderLinesV11(){
+- return [...document.querySelectorAll('#orderLines .v11-new-order-line')].map(r=>{let p=db.products.find(x=>x.id===r.querySelector('.liProd').value),req=normalize(r.querySelector('.liReqPack').value,r.querySelector('.liReqUnit').value,p),act=normalize(r.querySelector('.liPack').value,r.querySelector('.liUnit').value,p);return {productId:p.id,requestedTotal:req.total,total:act.total}}).filter(x=>x.requestedTotal>0||x.total>0)
+-}
+-function recalcOrderV11(){
+- if(!document.getElementById('orderLines'))return;let immediate=document.getElementById('v11PendingType')?.value==='immediate',lines=getNewOrderLinesV11(),occ=0,cuts=0,w=[];
+- if(immediate)lines.forEach(l=>{let p=db.products.find(x=>x.id===l.productId);occ+=l.total/(p.pack*p.perCut*p.cuts);cuts+=l.total?Math.ceil(l.total/(p.pack*p.perCut)):0;if(l.total>(db.stock[p.id]||0))w.push(`${p.name}: stock ${equivalent(db.stock[p.id]||0,p)}, entrega ${equivalent(l.total,p)}`)});
+- let sp=document.getElementById('suggestPallet'),sc=document.getElementById('suggestChap');if(sp)sp.textContent=Math.ceil(occ);if(sc)sc.textContent=cuts;
+- let po=document.getElementById('realPalletOut'),co=document.getElementById('realChapOut');if(po&&+po.value===0)po.value=Math.ceil(occ);if(co&&+co.value===0)co.value=cuts;
+- let warn=document.getElementById('stockWarning');if(warn)warn.innerHTML=w.length?`<div class="alert"><b>Stock insuficiente.</b><br>${w.join('<br>')}<label>Justificaci├│n obligatoria</label><textarea id="stockJustification"></textarea></div>`:''
+-}
+ function saveNewOrderV11(){
+  let num=document.getElementById('v11Number').value.trim(),type=document.getElementById('v11PendingType').value,lines=getNewOrderLinesV11();
+  if(!num||!lines.length||!lines.some(l=>l.requestedTotal>0))return alert('Complete el n├║mero y al menos una cantidad solicitada.');
