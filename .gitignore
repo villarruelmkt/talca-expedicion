@@ -1,7 +1,9 @@
 # Backups de base de datos
-*.json
-!manifest.json
 talca_backup_*.json
+!manifest.json
+!package.json
+!package-lock.json
+!vercel.json
 
 # Entornos y configuración local
 .agents/
