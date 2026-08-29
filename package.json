@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "minify": "npx terser js/firebase-init.js js/store.js js/settings.js js/employee.js js/stock.js js/orders.js js/print.js js/ui.js js/ui_orders.js js/ui_movements.js -o app.min.js -c -m",
+    "build": "npm run minify",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

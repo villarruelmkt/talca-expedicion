@@ -113,15 +113,36 @@ window.recalcOrderV11 = function recalcOrderV11(){
 };
 
 function renderAll() {
-  if (typeof renderRecentV11 === 'function') renderRecentV11();
-  if (typeof renderProductsConfigV11 === 'function') renderProductsConfigV11();
-  if (typeof renderEmployeeWorkbench === 'function') renderEmployeeWorkbench();
-  if (typeof renderMaterials === 'function') renderMaterials();
-  if (typeof renderOrdersV16 === 'function') renderOrdersV16();
-  if (typeof renderMovementsV16 === 'function') renderMovementsV16();
-  if (typeof renderPrintArea === 'function') renderPrintArea();
-  if (typeof renderPendingV13 === 'function') renderPendingV13();
-  if (typeof renderStockV1 === 'function') renderStockV1();
+  const tryRender = (fnName) => { try { if (typeof window[fnName] === 'function') window[fnName](); } catch(e) { console.error(fnName, e); } };
+  tryRender('renderRecentV11');
+  tryRender('renderProductsConfigV11');
+  tryRender('renderEmployeeWorkbench');
+  tryRender('renderMaterials');
+  tryRender('renderOrdersV16');
+  tryRender('renderMovementsV16');
+  tryRender('renderPrintArea');
+  tryRender('renderPendingV13');
+  tryRender('renderStockV1');
+
+  if(document.getElementById('auditBody')) {
+    document.getElementById('auditBody').innerHTML=[...(db.audit||[])].reverse().map(a=>`<tr><td>${fmtDate(a.date)}</td><td>${a.user}</td><td>${a.action}</td><td>${a.entity}</td><td>${a.ref}</td><td>${a.detail}</td></tr>`).join('');
+  }
+  if(document.getElementById('countsBody')) {
+    document.getElementById('countsBody').innerHTML=[...db.counts].reverse().map(c=>`<tr><td>${fmtDate(c.date)}</td><td>${c.shift}</td><td>${c.type}</td><td>${c.user}</td><td>${c.differences.length}</td><td>${c.status}</td></tr>`).join('');
+  }
+  if(document.getElementById('handoverAlert')) {
+    let pending=[...db.counts].reverse().find(c=>c.type==='Cierre de turno'&&c.status==='Pendiente de corroboración'&&c.shift!==session.shift);
+    document.getElementById('handoverAlert').innerHTML=pending?`<div class="alert"><b>Relevo pendiente.</b> ${pending.user} cerró el turno ${pending.shift} con ${pending.differences.length} diferencias. <button class="btn btn-primary" onclick="corroborateCount('${pending.id}')">Corroborar recepción</button></div>`:'';
+  }
+  if(document.getElementById('usersList')) {
+    document.getElementById('usersList').innerHTML=db.users.map(u=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b><br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`).join('');
+  }
+  if(document.getElementById('fleterosList')) {
+    document.getElementById('fleterosList').innerHTML=db.fleteros.map(f=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${f.name} ${f.surname||''}</b><br><span class="muted">${f.company||'Sin empresa indicada'}</span><div class="right"><button class="btn btn-secondary" onclick="editFletero('${f.id}')">Modificar</button></div></div>`).join('');
+  }
+  if(document.getElementById('employeeConfigList')) {
+    document.getElementById('employeeConfigList').innerHTML=db.employees.map(e=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${e.legajo} · ${e.name} ${e.surname}</b><br><span class="muted">${e.active?'Activo':'Inactivo'} · Saldo beneficio: ${e.balance||0} fardos</span><div class="right"><button class="btn btn-secondary" onclick="editEmployee('${e.id}')">Modificar</button></div></div>`).join('');
+  }
 }
 window.renderAll = renderAll;
 

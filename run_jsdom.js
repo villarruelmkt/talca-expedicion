@@ -19,5 +19,13 @@ dom.window.addEventListener('unhandledrejection', (event) => {
 });
 
 setTimeout(() => {
+  const window = dom.window;
+  console.log("DB Content Summary:");
+  const db = window.db || {};
+  console.log("Employees:", db.employees ? db.employees.length : "undefined");
+  console.log("Fleteros:", db.fleteros ? db.fleteros.length : "undefined");
+  console.log("Users:", db.users ? db.users.length : "undefined");
+  console.log("Products:", db.products ? db.products.length : "undefined");
+  
   console.log("JSDOM Execution finished after 5 seconds.");
 }, 5000);
