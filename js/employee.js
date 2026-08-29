@@ -162,13 +162,4 @@ function saveEmployeeAdvance(){
  items.forEach(x=>addStockMove({type:`Anticipo empleado - ${e.name} ${e.surname}`,ref:e.legajo,productId:x.p.id,total:x.n.total,dir:'out',note:[advNote.value,justification].filter(Boolean).join(' · ')}));save();let receiptNo=Date.now(),detail=items.map(x=>`${x.p.name}: ${equivalent(x.n.total,x.p)}`).join('<br>');dialog.innerHTML=`<div class="headrow"><h2>Comprobantes de anticipo</h2><button class="btn btn-secondary no-print" onclick="closeModal()">Cerrar</button></div><div class="card"><h3>ANTICIPO EMPLEADO – FACTURACIÓN</h3><p>N.º ${receiptNo} · ${fmtDate(now())}</p><p><b>Empleado:</b> ${e.name} ${e.surname} · <b>Legajo:</b> ${e.legajo}</p><p>${detail}</p><p><b>Encargado:</b> ${session.user} · <b>Turno:</b> ${session.shift}</p><br>Firma empleado: ____________________</div><div class="card" style="margin-top:14px"><h3>ANTICIPO EMPLEADO – CONTROL DE GUARDIA</h3><p>N.º ${receiptNo} · ${fmtDate(now())}</p><p><b>Empleado:</b> ${e.name} ${e.surname} · <b>Legajo:</b> ${e.legajo}</p><p>${detail}</p><p><b>Encargado:</b> ${session.user} · <b>Turno:</b> ${session.shift}</p></div><div class="right no-print"><button class="btn btn-secondary" onclick="printDialogAsReceipt('Comprobante');setTimeout(openPrintableDocument,700)">Abrir vista imprimible</button> <button class="btn btn-primary" onclick="printDialogAsReceipt('Comprobante')">Imprimir dos copias</button></div>`
 }
 
-function generateShiftSummary(){
- let today=new Date().toISOString().slice(0,10),moves=db.movements.filter(m=>m.date.slice(0,10)===today&&m.shift===session.shift),mats=db.materialMoves.filter(m=>m.date.slice(0,10)===today&&m.shift===session.shift);
- let byType={};moves.forEach(m=>byType[m.type]=(byType[m.type]||0)+1);
- let body=`<h1>Resumen de turno</h1><p><b>Fecha:</b> ${today} · <b>Turno:</b> ${session.shift} · <b>Encargado:</b> ${session.user}</p>
- <h2>Movimientos</h2><table><thead><tr><th>Tipo</th><th>Cantidad de registros</th></tr></thead><tbody>${Object.entries(byType).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</tbody></table>
- <h2>Materiales</h2><p>Pallets entregadas: ${mats.reduce((s,m)=>s+m.palletOut,0)} · devueltas: ${mats.reduce((s,m)=>s+m.palletIn,0)}</p><p>Chapadur entregado: ${mats.reduce((s,m)=>s+m.chapOut,0)} · devuelto: ${mats.reduce((s,m)=>s+m.chapIn,0)}</p>
- <h2>Pendientes</h2><p>Órdenes parciales: ${db.orders.filter(o=>o.status==='Parcial').length} · Cambios sin informar: ${db.orders.filter(o=>o.billing==='Pendiente de aviso').length}</p>`;
- setPrintableDocument('Resumen de turno',body);printCurrentDocument()
-}
 

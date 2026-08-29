@@ -60,18 +60,54 @@ function renderAll(){
  if(typeof renderMovementsV16 === 'function') renderMovementsV16();
  if(typeof renderMaterials === 'function') renderMaterials();
  if(typeof renderStockV1 === 'function') renderStockV1();
- let legacyEmployeesBody=document.getElementById('employeesBody');
- if(legacyEmployeesBody){
-   legacyEmployeesBody.innerHTML=db.employees.map(e=>`<tr><td>${e.legajo}</td><td>${e.name} ${e.surname}</td><td>${e.active?'Activo':'Inactivo'}</td><td><b>${e.balance||0} fardos</b></td><td>${e.lastConsumption?fmtDate(e.lastConsumption):'Sin consumos'}</td></tr>`).join('');
- }
- renderPending();auditBody.innerHTML=[...(db.audit||[])].reverse().map(a=>`<tr><td>${fmtDate(a.date)}</td><td>${a.user}</td><td>${a.action}</td><td>${a.entity}</td><td>${a.ref}</td><td>${a.detail}</td></tr>`).join('');
- countsBody.innerHTML=[...db.counts].reverse().map(c=>`<tr><td>${fmtDate(c.date)}</td><td>${c.shift}</td><td>${c.type}</td><td>${c.user}</td><td>${c.differences.length}</td><td>${c.status}</td></tr>`).join('');
- let pending=[...db.counts].reverse().find(c=>c.type==='Cierre de turno'&&c.status==='Pendiente de corroboración'&&c.shift!==session.shift);
- handoverAlert.innerHTML=pending?`<div class="alert"><b>Relevo pendiente.</b> ${pending.user} cerró el turno ${pending.shift} con ${pending.differences.length} diferencias. <button class="btn btn-primary" onclick="corroborateCount('${pending.id}')">Corroborar recepción</button></div>`:'';
- usersList.innerHTML=db.users.map(u=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b><br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`).join('');
- fleterosList.innerHTML=db.fleteros.map(f=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${f.name} ${f.surname||''}</b><br><span class="muted">${f.company||'Sin empresa indicada'}</span><div class="right"><button class="btn btn-secondary" onclick="editFletero('${f.id}')">Modificar</button></div></div>`).join('');
- employeeConfigList.innerHTML=db.employees.map(e=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${e.legajo} · ${e.name} ${e.surname}</b><br><span class="muted">${e.active?'Activo':'Inactivo'} · Saldo beneficio: ${e.balance||0} fardos</span><div class="right"><button class="btn btn-secondary" onclick="editEmployee('${e.id}')">Modificar</button></div></div>`).join('');
- productsList.innerHTML=db.products.map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet</span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('');
+  try {
+    let legacyEmployeesBody=document.getElementById('employeesBody');
+    if(legacyEmployeesBody){
+      legacyEmployeesBody.innerHTML=(db.employees||[]).map(e=>`<tr><td>${e.legajo}</td><td>${e.name} ${e.surname}</td><td>${e.active?'Activo':'Inactivo'}</td><td><b>${e.balance||0} fardos</b></td><td>${e.lastConsumption?fmtDate(e.lastConsumption):'Sin consumos'}</td></tr>`).join('');
+    }
+  } catch(e) { console.error("renderAll employeesBody error", e); }
+
+  try {
+    if(typeof renderPending === 'function') renderPending();
+  } catch(e) { console.error("renderAll renderPending error", e); }
+
+  try {
+    let el = document.getElementById('auditBody');
+    if(el) el.innerHTML=[...(db.audit||[])].reverse().map(a=>`<tr><td>${fmtDate(a.date)}</td><td>${a.user}</td><td>${a.action}</td><td>${a.entity}</td><td>${a.ref}</td><td>${a.detail}</td></tr>`).join('');
+  } catch(e) { console.error("renderAll auditBody error", e); }
+
+  try {
+    let el = document.getElementById('countsBody');
+    if(el) el.innerHTML=[...(db.counts||[])].reverse().map(c=>`<tr><td>${fmtDate(c.date)}</td><td>${c.shift}</td><td>${c.type}</td><td>${c.user}</td><td>${c.differences?.length||0}</td><td>${c.status}</td></tr>`).join('');
+  } catch(e) { console.error("renderAll countsBody error", e); }
+
+  try {
+    let el = document.getElementById('handoverAlert');
+    if(el) {
+      let pending=[...(db.counts||[])].reverse().find(c=>c.type==='Cierre de turno'&&c.status==='Pendiente de corroboración'&&c.shift!==session.shift);
+      el.innerHTML=pending?`<div class="alert"><b>Relevo pendiente.</b> ${pending.user} cerró el turno ${pending.shift} con ${pending.differences?.length||0} diferencias. <button class="btn btn-primary" onclick="corroborateCount('${pending.id}')">Corroborar recepción</button></div>`:'';
+    }
+  } catch(e) { console.error("renderAll handoverAlert error", e); }
+
+  try {
+    let el = document.getElementById('usersList');
+    if(el) el.innerHTML=(db.users||[]).map(u=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b><br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`).join('');
+  } catch(e) { console.error("renderAll usersList error", e); }
+
+  try {
+    let el = document.getElementById('fleterosList');
+    if(el) el.innerHTML=(db.fleteros||[]).map(f=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${f.name} ${f.surname||''}</b><br><span class="muted">${f.company||'Sin empresa indicada'}</span><div class="right"><button class="btn btn-secondary" onclick="editFletero('${f.id}')">Modificar</button></div></div>`).join('');
+  } catch(e) { console.error("renderAll fleterosList error", e); }
+
+  try {
+    let el = document.getElementById('employeeConfigList');
+    if(el) el.innerHTML=(db.employees||[]).map(e=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${e.legajo} · ${e.name} ${e.surname}</b><br><span class="muted">${e.active?'Activo':'Inactivo'} · Saldo beneficio: ${e.balance||0} fardos</span><div class="right"><button class="btn btn-secondary" onclick="editEmployee('${e.id}')">Modificar</button></div></div>`).join('');
+  } catch(e) { console.error("renderAll employeeConfigList error", e); }
+
+  try {
+    let el = document.getElementById('productsList');
+    if(el) el.innerHTML=(db.products||[]).map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet</span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('');
+  } catch(e) { console.error("renderAll productsList error", e); }
 }
 
 // ===== Talca Expedición v1.1: migración, empleados, stock pendiente y backups =====
@@ -1043,7 +1079,7 @@ function savePendingV14(pid){
 function v15AddFardos(totals, key, total, p) {
   totals[key] = (totals[key] || 0) + (Number(total || 0) / p.pack);
 }
-renderStockV1=function(){
+window.renderStockV1 = function renderStockV1(){
   if(!document.getElementById('stockBody'))return;
   let q=v14SearchNorm(document.getElementById('stockSearchV1')?.value||''),filter=document.getElementById('stockStateV1')?.value||'';
   let list=(db.products||[]).filter(p=>p.active!==false).filter(p=>{
