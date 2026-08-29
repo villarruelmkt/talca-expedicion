@@ -28,4 +28,13 @@ function restoreApplicationView(){
  let area=document.getElementById('printArea');
  area.style.display='none';area.style.position='';area.style.width='';area.style.padding='';
  document.querySelectorAll('body > *:not(#printArea)').forEach(el=>el.style.display=el.dataset.prevDisplay||'');
-}
+}function generateShiftSummary(){
+ let today=new Date().toISOString().slice(0,10),moves=db.movements.filter(m=>m.date.slice(0,10)===today&&m.shift===session.shift),mats=db.materialMoves.filter(m=>m.date.slice(0,10)===today&&m.shift===session.shift);
+ let byType={};moves.forEach(m=>byType[m.type]=(byType[m.type]||0)+1);
+ let body=`<h1>Resumen de turno</h1><p><b>Fecha:</b> ${today} Â· <b>Turno:</b> ${session.shift} Â· <b>Encargado:</b> ${session.user}</p>
+ <h2>Movimientos</h2><table><thead><tr><th>Tipo</th><th>Cantidad de registros</th></tr></thead><tbody>${Object.entries(byType).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</tbody></table>
+ <h2>Materiales</h2><p>Pallets entregadas: ${mats.reduce((s,m)=>s+m.palletOut,0)} Â· devueltas: ${mats.reduce((s,m)=>s+m.palletIn,0)}</p><p>Chapadur entregado: ${mats.reduce((s,m)=>s+m.chapOut,0)} Â· devuelto: ${mats.reduce((s,m)=>s+m.chapIn,0)}</p>
+ <h2>Pendientes</h2><p>Ã“rdenes parciales: ${db.orders.filter(o=>o.status==='Parcial').length} Â· Cambios sin informar: ${db.orders.filter(o=>o.billing==='Pendiente de aviso').length}</p>`;
+ setPrintableDocument('Resumen de turno',body);printCurrentDocument()
+}
+

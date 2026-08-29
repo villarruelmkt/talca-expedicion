@@ -21,8 +21,9 @@ setTimeout(() => {
   const document = window.document;
   try {
     console.log("DB status:", window.db ? "Exists" : "Undefined");
-    if(window.db) console.log("DB users length:", window.db.users?.length);
-    if (window.renderAll) window.renderAll();
+    if(window.db) console.log("DB products length:", window.db.products?.length);
+    window.session = { user: 'u1', shift: 'Mañana' };
+    if (window.renderStockV1) window.renderStockV1();
     console.log("Employees Body:", document.getElementById('employeesBody')?.innerHTML.length);
     console.log("Stock Body:", document.getElementById('stockBody')?.innerHTML.length);
     console.log("Users List:", document.getElementById('usersList')?.innerHTML.length);

@@ -15,8 +15,10 @@ docRef.onSnapshot((doc) => {
     db.stock = cloudDb.stock || db.stock;
     db.stockBuckets = cloudDb.stockBuckets || db.stockBuckets;
     db.products = cloudDb.products || db.products;
-    db.fleteros = cloudDb.fleteros || db.fleteros;
-    db.employees = cloudDb.employees || db.employees;
+    db.fleteros = (cloudDb.fleteros && cloudDb.fleteros.length) ? cloudDb.fleteros : db.fleteros;
+    db.employees = (cloudDb.employees && cloudDb.employees.length) ? cloudDb.employees : db.employees;
+    db.users = (cloudDb.users && cloudDb.users.length) ? cloudDb.users : db.users;
+    db.counters = cloudDb.counters || db.counters;
     
     safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
   } else {
