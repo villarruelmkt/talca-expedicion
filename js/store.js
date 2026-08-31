@@ -226,6 +226,7 @@ function toggleStockUnit() {
   if(typeof renderStockV1 === 'function') renderStockV1();
 }
 function equivalent(total, prod) {
+  if (!prod || !prod.pack) return `${total} un.`;
   if (typeof v1StockUnit !== 'undefined' && v1StockUnit === 'pallets') {
     let perPallet = prod.pack * (prod.perCut || 20) * (prod.cuts || 4);
     if (perPallet > 0) {
