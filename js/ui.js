@@ -1406,7 +1406,7 @@ function v13OpenOrderEditor(existingId=''){
     <div><label>Chapadur que devuelve</label><input id="v13ChapIn" class="field" type="number" min="0" value="0"></div>
   </div></div>
   <div id="v13StockWarning"></div>
-  <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button id="v13SaveButton" class="btn btn-primary" onclick="v13SaveOrder()">Guardar orden</button></div>`);
+  <div class="right" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div>${o?`<button type="button" class="btn btn-danger" onclick="deleteOrder('${o.id}')">Eliminar orden</button>`:''}</div><div style="display:flex;gap:8px;"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button id="v13SaveButton" class="btn btn-primary" onclick="v13SaveOrder()">Guardar orden</button></div></div>`);
   (o?.requestLines||[]).forEach(line=>v14AppendConfirmed(line,Number(actual[line.productId]||0)));
   v14RefreshEmpty();
   if(hasDeliveries){
@@ -1473,7 +1473,7 @@ function viewOrder(id){
   modal(`<div class="headrow"><div><h2>Orden ${v14Text(o.number)}</h2><div class="muted">${v14Text(v13CarrierDisplay(f))} · ${v14Text(o.date)} · ${v14Text(V11_PENDING_LABELS[o.pendingType||'legacy']||'Operación histórica')}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
   <div class="summary"><b>Estado: ${v14Text(status)}</b>${modern&&v13IsOperational(o.pendingType)?` · Pendiente total: ${outstanding} unidades`:''}<br><span class="muted">${v14Text(o.note||'Sin observaciones')}</span></div>
   ${requests}${deliveries}${history?`<div class="card" style="margin-top:10px"><h3>Historial de correcciones</h3>${history}</div>`:''}
-  <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal();openOrderForm('${o.id}')">Corregir orden</button>${modern&&v13IsOperational(o.pendingType)&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openPendingDispatchV11(db.orders.find(x=>x.id==='${o.id}'))">Confirmar salida</button>`:''}<button class="btn btn-secondary" onclick="v16PrintOrder('${o.id}')">Imprimir</button></div>`);
+  <div class="right" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><button type="button" class="btn btn-danger" onclick="deleteOrder('${o.id}')">Eliminar orden</button></div><div style="display:flex;gap:8px;"><button class="btn btn-secondary" onclick="closeModal();openOrderForm('${o.id}')">Corregir orden</button>${modern&&v13IsOperational(o.pendingType)&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openPendingDispatchV11(db.orders.find(x=>x.id==='${o.id}'))">Confirmar salida</button>`:''}<button class="btn btn-secondary" onclick="v16PrintOrder('${o.id}')">Imprimir</button></div></div>`);
 }
 
 // Resumen del turno centrado en órdenes y productos.

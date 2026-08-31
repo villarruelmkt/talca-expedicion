@@ -87,7 +87,71 @@ function printSection(id,title){document.querySelectorAll('.page').forEach(p=>p.
   <div><label>FacturaciÃ³n</label><select id="billingStatus"><option>No aplica</option><option>Pendiente de aviso</option><option>Avisada</option></select></div>
  </div></div>
  <div id="stockWarning"></div>
- <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button> <button class="btn btn-primary" onclick="saveOrderDelivery('${o?o.id:''}')">Confirmar entrega</button></div>`);
+ <div class="right" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div>${o?`<button type="button" class="btn btn-danger" onclick="deleteOrder('${o.id}')">Eliminar orden</button>`:''}</div><div style="display:flex;gap:8px;"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button> <button class="btn btn-primary" onclick="saveOrderDelivery('${o?o.id:''}')">Confirmar entrega</button></div></div>`);
  if(o)oCarrier.value=o.fleteroId;
  addOrderLine();
 }
+
+function deleteOrder(id){
+  let o = (db.orders || []).find(x => x.id === id);
+  if(!o) return;
+
+  let hasDeliveries = Boolean((o.deliveries || []).length);
+  let isOperational = typeof v13IsOperational === 'function' ? v13IsOperational(o.pendingType) : false;
+  let typeLabel = (typeof V11_PENDING_LABELS !== 'undefined' && V11_PENDING_LABELS[o.pendingType]) || o.pendingType || 'orden';
+
+  let msg = `¿Está seguro de eliminar la orden N.° ${o.number}?`;
+  if(hasDeliveries){
+    msg += `\n\nATENCIÓN: Esta orden ya cuenta con salidas confirmadas. Al eliminarla se revertirá el stock físico entregado y los movimientos de materiales asociados.`;
+  } else if(isOperational){
+    msg += `\n\nSe liberará la reserva de stock (${typeLabel}).`;
+  }
+
+  if(!confirm(msg)) return;
+
+  // 1. Si tenía pendientes operativos reservados, restarlos de los buckets
+  if(isOperational && typeof v13MapOutstanding === 'function' && typeof v13ApplyOutstanding === 'function'){
+    let outstanding = v13MapOutstanding(o);
+    v13ApplyOutstanding(o.pendingType, outstanding, -1);
+  }
+
+  // 2. Si tenía salidas físicas entregadas, devolver el stock físico y limpiar movimientos
+  if(hasDeliveries){
+    (o.deliveries || []).forEach(d => {
+      (d.lines || []).forEach(l => {
+        let pid = l.productId;
+        let qty = Number(l.total || 0);
+        if(qty > 0 && db.stock){
+          db.stock[pid] = (Number(db.stock[pid]) || 0) + qty;
+          if(typeof v1EnsureBucket === 'function'){
+            v1EnsureBucket(pid).physical = db.stock[pid];
+          }
+        }
+      });
+    });
+    // Eliminar movimientos de stock vinculados a esta orden
+    db.movements = (db.movements || []).filter(m => !(m.ref === o.number && m.type === 'Orden de carga'));
+    // Eliminar movimientos de materiales vinculados a esta orden
+    db.materialMoves = (db.materialMoves || []).filter(m => !(m.ref === o.number && m.source === 'Orden de carga'));
+  }
+
+  // 3. Eliminar la orden de la base de datos
+  db.orders = (db.orders || []).filter(x => x.id !== id);
+
+  // 4. Registrar en auditoría
+  if(typeof audit === 'function'){
+    audit('Baja', 'Orden', o.number, `Orden eliminada por ${session?.user || 'usuario'}${hasDeliveries ? ' (con reversión de stock)' : ''}`);
+  }
+
+  // 5. Guardar en Firebase y refrescar interfaz
+  if(typeof save === 'function') save();
+  if(typeof closeModal === 'function') closeModal();
+  if(typeof renderAll === 'function') renderAll();
+  if(typeof toast === 'function'){
+    toast(`Orden N.° ${o.number} eliminada correctamente.`, 'done');
+  } else {
+    alert(`Orden N.° ${o.number} eliminada correctamente.`);
+  }
+}
+window.deleteOrder = deleteOrder;
+
