@@ -244,3 +244,30 @@ function equivalent(total, prod) {
   return `${Math.floor(total/prod.pack)} fardos${total%prod.pack?' + '+total%prod.pack+' un.':''}`;
 }
 function audit(action,entity,ref,detail=''){db.audit=db.audit||[];db.audit.push({id:uid('a'),date:now(),user:session?.user||'Sistema',action,entity,ref,detail})}
+
+// Auto-repair para sincronizar los fleteroId de los movimientos de materiales con sus órdenes correspondientes
+setTimeout(() => {
+  if (typeof db !== 'undefined' && db.materialMoves && db.orders) {
+    let changed = false;
+    db.materialMoves.forEach(m => {
+      if (m.orderId || m.source === 'Orden de carga' || m.source === 'Corrección de orden') {
+        let order = db.orders.find(o => o.id === m.orderId || (o.number === m.ref && m.source === 'Orden de carga'));
+        if (order) {
+          let fId = order.fleteroId || (order.fletero && order.fletero.id);
+          if (fId && m.fleteroId !== fId) {
+            m.fleteroId = fId;
+            changed = true;
+          }
+        }
+      }
+    });
+    if (changed) {
+      if (typeof save === 'function') save();
+      if (document.getElementById('materialsTotals')) {
+        // Refresh materials view if currently active
+        if (typeof window.renderMaterials === 'function') window.renderMaterials();
+        else if (typeof window.renderMaterialsV11 === 'function') window.renderMaterialsV11();
+      }
+    }
+  }
+}, 3500);
