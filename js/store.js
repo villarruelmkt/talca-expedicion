@@ -245,26 +245,16 @@ function equivalent(total, prod) {
 }
 function audit(action,entity,ref,detail=''){db.audit=db.audit||[];db.audit.push({id:uid('a'),date:now(),user:session?.user||'Sistema',action,entity,ref,detail})}
 
-// Auto-repair para sincronizar los fleteroId de los movimientos de materiales con sus órdenes correspondientes
+// Auto-repair: Eliminar movimientos de materiales con fleteroId inválido
 setTimeout(() => {
-  if (typeof db !== 'undefined' && db.materialMoves && db.orders) {
-    let changed = false;
-    db.materialMoves.forEach(m => {
-      if (m.orderId || m.source === 'Orden de carga' || m.source === 'Corrección de orden') {
-        let order = db.orders.find(o => o.id === m.orderId || (o.number === m.ref && m.source === 'Orden de carga'));
-        if (order) {
-          let fId = order.fleteroId || (order.fletero && order.fletero.id);
-          if (fId && m.fleteroId !== fId) {
-            m.fleteroId = fId;
-            changed = true;
-          }
-        }
-      }
+  if (typeof db !== 'undefined' && db.materialMoves && db.fleteros) {
+    let originalLength = db.materialMoves.length;
+    db.materialMoves = db.materialMoves.filter(m => {
+      return db.fleteros.some(f => f.id === m.fleteroId);
     });
-    if (changed) {
+    if (db.materialMoves.length !== originalLength) {
       if (typeof save === 'function') save();
       if (document.getElementById('materialsTotals')) {
-        // Refresh materials view if currently active
         if (typeof window.renderMaterials === 'function') window.renderMaterials();
         else if (typeof window.renderMaterialsV11 === 'function') window.renderMaterialsV11();
       }
