@@ -8,16 +8,24 @@ let lastSyncedDb = {
 };
 function fastHash(obj) { return JSON.stringify(obj); }
 
+function mergeList(local, cloud) {
+   if (!cloud || !cloud.length) return local || [];
+   if (!local || !local.length) return cloud || [];
+   let map = new Map((local || []).map(x => [x.id, x]));
+   (cloud || []).forEach(x => map.set(x.id, x));
+   return Array.from(map.values());
+}
+
 docRef.onSnapshot((doc) => {
   if (doc.exists) {
     let cloudDb = doc.data();
     // Stock y configuraciones toman el valor de la nube (última verdad)
     db.stock = cloudDb.stock || db.stock;
     db.stockBuckets = cloudDb.stockBuckets || db.stockBuckets;
-    db.products = cloudDb.products || db.products;
-    db.fleteros = (cloudDb.fleteros && cloudDb.fleteros.length) ? cloudDb.fleteros : db.fleteros;
-    db.employees = (cloudDb.employees && cloudDb.employees.length) ? cloudDb.employees : db.employees;
-    db.users = (cloudDb.users && cloudDb.users.length) ? cloudDb.users : db.users;
+    db.products = mergeList(db.products, cloudDb.products);
+    db.fleteros = mergeList(db.fleteros, cloudDb.fleteros);
+    db.employees = mergeList(db.employees, cloudDb.employees);
+    db.users = mergeList(db.users, cloudDb.users);
     db.counters = cloudDb.counters || db.counters;
     
     safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
@@ -67,14 +75,23 @@ setTimeout(() => {
    if (isFirebaseReady) {
       console.log('Iniciando verificación de colecciones en background...');
       ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
+         let currentIds = new Set();
          (db[col] || []).forEach(item => {
             if (!item.id) return;
+            currentIds.add(item.id);
             let hash = fastHash(item);
             if (lastSyncedDb[col].get(item.id) !== hash) {
                firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
                lastSyncedDb[col].set(item.id, hash);
             }
          });
+         
+         for (let id of lastSyncedDb[col].keys()) {
+            if (!currentIds.has(id)) {
+               firestoreDb.collection(col).doc(id).delete().catch(console.error);
+               lastSyncedDb[col].delete(id);
+            }
+         }
       });
    }
 }, 5000);
@@ -89,14 +106,23 @@ function save(){
  if (isFirebaseReady) {
    // Diff & Sync: Solo subimos a colecciones los items modificados o nuevos
    ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
+      let currentIds = new Set();
       (db[col] || []).forEach(item => {
          if (!item.id) return;
+         currentIds.add(item.id);
          let hash = fastHash(item);
          if (lastSyncedDb[col].get(item.id) !== hash) {
             firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
             lastSyncedDb[col].set(item.id, hash);
          }
       });
+      
+      for (let id of lastSyncedDb[col].keys()) {
+         if (!currentIds.has(id)) {
+            firestoreDb.collection(col).doc(id).delete().catch(console.error);
+            lastSyncedDb[col].delete(id);
+         }
+      }
    });
 
    // Documento maestro súper liviano (Libre de límite de 1MB)
