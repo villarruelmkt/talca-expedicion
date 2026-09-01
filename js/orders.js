@@ -130,13 +130,23 @@ function deleteOrder(id){
       });
     });
     // Eliminar movimientos de stock vinculados a esta orden
+    let deletedMovements = (db.movements || []).filter(m => m.ref === o.number && m.type === 'Orden de carga');
     db.movements = (db.movements || []).filter(m => !(m.ref === o.number && m.type === 'Orden de carga'));
     // Eliminar movimientos de materiales vinculados a esta orden
+    let deletedMaterialMoves = (db.materialMoves || []).filter(m => m.ref === o.number && m.source === 'Orden de carga');
     db.materialMoves = (db.materialMoves || []).filter(m => !(m.ref === o.number && m.source === 'Orden de carga'));
+    
+    if (typeof firestoreDb !== 'undefined') {
+      deletedMovements.forEach(m => firestoreDb.collection('movements').doc(m.id).delete().catch(console.error));
+      deletedMaterialMoves.forEach(m => firestoreDb.collection('materialMoves').doc(m.id).delete().catch(console.error));
+    }
   }
 
   // 3. Eliminar la orden de la base de datos
   db.orders = (db.orders || []).filter(x => x.id !== id);
+  if (typeof firestoreDb !== 'undefined') {
+    firestoreDb.collection('orders').doc(id).delete().catch(console.error);
+  }
 
   // 4. Registrar en auditoría
   if(typeof audit === 'function'){
