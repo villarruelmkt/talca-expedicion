@@ -47,6 +47,12 @@ function setupCollectionListeners() {
        snap.docChanges().forEach(change => {
           if (change.type === 'added' || change.type === 'modified') {
              let data = change.doc.data();
+             if (data._deleted) {
+                db[col] = (db[col]||[]).filter(x => x.id !== data.id);
+                lastSyncedDb[col].delete(data.id);
+                updated = true;
+                return;
+             }
              let idx = (db[col]||[]).findIndex(x => x.id === data.id);
              if (idx >= 0) db[col][idx] = data;
              else { db[col] = db[col]||[]; db[col].push(data); }
@@ -88,7 +94,8 @@ setTimeout(() => {
          
          for (let id of lastSyncedDb[col].keys()) {
             if (!currentIds.has(id)) {
-               firestoreDb.collection(col).doc(id).delete().catch(console.error);
+               let dRef = firestoreDb.collection(col).doc(id);
+               dRef.delete().catch(err => dRef.update({ _deleted: true }).catch(console.error));
                lastSyncedDb[col].delete(id);
             }
          }
@@ -119,7 +126,11 @@ function save(){
       
       for (let id of lastSyncedDb[col].keys()) {
          if (!currentIds.has(id)) {
-            firestoreDb.collection(col).doc(id).delete().catch(console.error);
+            let dRef = firestoreDb.collection(col).doc(id);
+            dRef.delete().catch(err => {
+               console.warn('Fallback to soft delete for', id);
+               dRef.update({ _deleted: true }).catch(console.error);
+            });
             lastSyncedDb[col].delete(id);
          }
       }

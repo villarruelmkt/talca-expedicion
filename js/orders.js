@@ -137,15 +137,22 @@ function deleteOrder(id){
     db.materialMoves = (db.materialMoves || []).filter(m => !(m.ref === o.number && m.source === 'Orden de carga'));
     
     if (typeof firestoreDb !== 'undefined') {
-      deletedMovements.forEach(m => firestoreDb.collection('movements').doc(m.id).delete().catch(console.error));
-      deletedMaterialMoves.forEach(m => firestoreDb.collection('materialMoves').doc(m.id).delete().catch(console.error));
+      deletedMovements.forEach(m => {
+        let dRef = firestoreDb.collection('movements').doc(m.id);
+        dRef.delete().catch(e => dRef.update({ _deleted: true }).catch(console.error));
+      });
+      deletedMaterialMoves.forEach(m => {
+        let dRef = firestoreDb.collection('materialMoves').doc(m.id);
+        dRef.delete().catch(e => dRef.update({ _deleted: true }).catch(console.error));
+      });
     }
   }
 
   // 3. Eliminar la orden de la base de datos
   db.orders = (db.orders || []).filter(x => x.id !== id);
   if (typeof firestoreDb !== 'undefined') {
-    firestoreDb.collection('orders').doc(id).delete().catch(console.error);
+    let dRef = firestoreDb.collection('orders').doc(id);
+    dRef.delete().catch(e => dRef.update({ _deleted: true }).catch(console.error));
   }
 
   // 4. Registrar en auditoría
