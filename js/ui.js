@@ -843,7 +843,7 @@ function v13OpenOrderEditor(existingId=''){
     // Después de una salida no se permite volver a un estado administrativo ni alterar el circuito general.
     [...select.options].forEach(opt=>{
       if(o.pendingType==='immediate')opt.disabled=opt.value!=='immediate';
-      else if(v13IsOperational(o.pendingType))opt.disabled=opt.value==='administrative'||opt.value==='immediate';
+      else if(v13IsOperational(o.pendingType))opt.disabled=(opt.value==='administrative' && o.pendingType!=='administrative')||opt.value==='immediate';
     });
   }
   v13ToggleMode();
@@ -1025,7 +1025,7 @@ function v14DatePart(value){return String(value||'').slice(0,10)}
 
 // Sin codificar deja de ser una afectación posible de las órdenes.
 v13IsOperational=function(type){
-  return ['preventa','distriC','distriInterior','oesteMendoza','oesteJeremias'].includes(type);
+  return ['administrative','preventa','distriC','distriInterior','oesteMendoza','oesteJeremias'].includes(type);
 };
 v13TypeOptions=function(selected='administrative'){
   let keys=['administrative','cancelled','preventa','distriC','distriInterior','oesteMendoza','oesteJeremias','immediate'];
@@ -1418,7 +1418,7 @@ function v13OpenOrderEditor(existingId=''){
     let select=document.getElementById('v13OrderType');
     [...select.options].forEach(opt=>{
       if(o.pendingType==='immediate')opt.disabled=opt.value!=='immediate';
-      else if(v13IsOperational(o.pendingType))opt.disabled=opt.value==='administrative'||opt.value==='immediate';
+      else if(v13IsOperational(o.pendingType))opt.disabled=(opt.value==='administrative' && o.pendingType!=='administrative')||opt.value==='immediate';
     });
   }
   v13ToggleMode();
