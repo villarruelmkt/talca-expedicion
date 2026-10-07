@@ -166,14 +166,7 @@ function v11OrderOutstanding(o){return Math.max(0,v11OrderRequested(o)-v11OrderR
 function v11DeliveredTotal(o){return (o.deliveries||[]).reduce((s,d)=>s+(d.lines||[]).reduce((a,l)=>a+Number(l.total||0),0),0)}
 function v11LineOutstanding(l){return Math.max(0,Number(l.total||0)-Number(l.resolvedTotal||0))}
 function v11FindRequestLine(o,sourceProductId){return (o.requestLines||[]).find(l=>l.productId===sourceProductId&&v11LineOutstanding(l)>0)||(o.requestLines||[]).find(l=>l.productId===sourceProductId)}
-function v11OrderStatus(o){
- if(o.pendingType==='immediate')return o.status||'Despachada';
- let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o),sub=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));
- if(outstanding===0)return 'Despachada';
- if(sub)return 'Pendiente de Facturación';
- if(delivered>0)return 'Parcialmente despachada';
- return 'Pendiente de despacho'
-}
+
 function v11ProductSelect(selected=''){return db.products.filter(p=>p.active!==false).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${p.id} · ${p.name}</option>`).join('')}
 
 
@@ -640,17 +633,7 @@ v11DecreasePending=function(type,productId,total){
   b[type]=Math.max(0,Number(b[type]||0)-applied);
   return applied;
 };
-v11OrderStatus=function(o){
-  if(o.pendingType==='administrative')return 'PENDIENTE';
-  if(o.pendingType==='cancelled')return 'Anulada';
-  if(o.pendingType==='immediate')return o.status||'Despachada';
-  let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o);
-  let substitution=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));
-  if(outstanding===0)return 'Despachada';
-  if(substitution)return 'Pendiente de Facturación';
-  if(delivered>0)return 'Parcialmente despachada';
-  return 'Pendiente de despacho';
-};
+
 
 function v13TypeOptions(selected='administrative'){
   let keys=['administrative','cancelled','preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias','immediate'];
@@ -1033,7 +1016,7 @@ v13TypeOptions=function(selected='administrative'){
   if(selected==='sinCodificar')html=`<option value="sinCodificar" selected disabled>Sin codificar · histórico</option>`+html;
   return html;
 };
-v11OrderStatus=function(o){
+window.v11OrderStatus = function(o){
   if(o.pendingType==='cancelled')return 'Anulada';
   if(o.pendingType==='immediate')return o.status||'Despachada';
   let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o);
