@@ -600,6 +600,7 @@ if(selectedEmployeeId&&document.getElementById('employeeWorkbench'))renderEmploy
 // ===== Talca Expedición v1.3: fleteros rápidos, edición y PENDIENTE administrativo =====
 const V13_SCHEMA_VERSION=4;
 V11_PENDING_LABELS.administrative='PENDIENTE · Sin impacto';
+V11_PENDING_LABELS.cancelled='Anulada';
 
 function v13Esc(value){
   return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -641,6 +642,7 @@ v11DecreasePending=function(type,productId,total){
 };
 v11OrderStatus=function(o){
   if(o.pendingType==='administrative')return 'PENDIENTE';
+  if(o.pendingType==='cancelled')return 'Anulada';
   if(o.pendingType==='immediate')return o.status||'Despachada';
   let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o);
   let substitution=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));
@@ -651,7 +653,7 @@ v11OrderStatus=function(o){
 };
 
 function v13TypeOptions(selected='administrative'){
-  let keys=['administrative','preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias','immediate'];
+  let keys=['administrative','cancelled','preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias','immediate'];
   return keys.map(k=>`<option value="${k}" ${selected===k?'selected':''}>${V11_PENDING_LABELS[k]}</option>`).join('');
 }
 function v13SearchCarriers(){
@@ -891,7 +893,7 @@ function v13SaveOrder(){
   if(db.orders.some(o=>o.number===number&&o.id!==existing?.id))return alert('El número de orden ya existe.');
 
   let formLines=v13CollectLines();
-  if(!formLines.length||!formLines.some(l=>l.requestedTotal>0))return alert('Agregue al menos un producto con cantidad solicitada.');
+  if(type !== 'cancelled' && (!formLines.length||!formLines.some(l=>l.requestedTotal>0)))return alert('Agregue al menos un producto con cantidad solicitada.');
   let hasDeliveries=Boolean((existing?.deliveries||[]).length);
   if(hasDeliveries&&existing.pendingType==='immediate'&&type!=='immediate')return alert('Una salida inmediata ya confirmada no puede cambiar de circuito.');
   if(hasDeliveries&&v13IsOperational(existing.pendingType)&&!v13IsOperational(type))return alert('Una orden con salidas confirmadas debe permanecer en un pendiente operativo.');
@@ -921,6 +923,8 @@ function v13SaveOrder(){
 
   if(type==='administrative'){
     o.status='PENDIENTE';
+  }else if(type==='cancelled'){
+    o.status='Anulada';
   }else if(v13IsOperational(type)){
     let newOutstanding=v13MapOutstanding(o);
     v13ApplyOutstanding(type,newOutstanding,1);
@@ -1024,13 +1028,14 @@ v13IsOperational=function(type){
   return ['preventa','distriC','distriInterior','oesteMendoza','oesteJeremias'].includes(type);
 };
 v13TypeOptions=function(selected='administrative'){
-  let keys=['administrative','preventa','distriC','distriInterior','oesteMendoza','oesteJeremias','immediate'];
+  let keys=['administrative','cancelled','preventa','distriC','distriInterior','oesteMendoza','oesteJeremias','immediate'];
   let html=keys.map(k=>`<option value="${k}" ${selected===k?'selected':''}>${V11_PENDING_LABELS[k]}</option>`).join('');
   if(selected==='sinCodificar')html=`<option value="sinCodificar" selected disabled>Sin codificar · histórico</option>`+html;
   return html;
 };
 v11OrderStatus=function(o){
   if(o.pendingType==='administrative')return 'PENDIENTE';
+  if(o.pendingType==='cancelled')return 'Anulada';
   if(o.pendingType==='immediate')return o.status||'Despachada';
   let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o);
   let substitution=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));

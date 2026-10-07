@@ -49,6 +49,19 @@ function renderEditMovementBtn(g) {
 function renderMovementsV16(){
   let body=document.getElementById('movementsBody');if(!body)return;
   let list=v16GroupedMovements();
+  
+  let fromD = document.getElementById('movFrom')?.value;
+  let toD = document.getElementById('movTo')?.value;
+  let t = document.getElementById('movType')?.value;
+
+  if (fromD) list = list.filter(g => g.date >= fromD);
+  if (toD) list = list.filter(g => g.date <= toD + 'T23:59:59');
+  if (t === 'Producción') {
+    list = list.filter(g => g.type === 'Producción' || g.type === 'Producción sin codificar');
+  } else if (t) {
+    list = list.filter(g => g.type === t);
+  }
+
   body.innerHTML=list.map(g=>`<tr>
     <td>${fmtDate(g.date)}</td>
     <td>${v14Text(g.type)}${g.count>1?`<span class="v16-group-badge">${g.count} productos</span>`:''}</td>
@@ -62,6 +75,12 @@ function renderMovementsV16(){
   </tr>`).join('')||'<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
 }
 
+window.clearMovFilters = function() {
+  if(document.getElementById('movFrom')) document.getElementById('movFrom').value = '';
+  if(document.getElementById('movTo')) document.getElementById('movTo').value = '';
+  if(document.getElementById('movType')) document.getElementById('movType').value = '';
+  renderMovementsV16();
+};
 function editMovement(id) {
   let m = db.movements.find(x => x.id === id);
   if (!m) return;
