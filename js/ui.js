@@ -2025,14 +2025,22 @@ function v16PrintOrder(id){
     return { pallets: 0, loose: `${Math.floor(total/prod.pack)} fardos${total%prod.pack?' + '+total%prod.pack+' un.':''}` };
   }
 
+  let totalFardos = 0;
   let requests=(o.requestLines||[]).map(l=>{
     let p=db.products.find(x=>x.id===l.productId);
     let pd = formatPallets(l.total, p);
+    if (p && p.pack) totalFardos += Math.floor(l.total / p.pack);
+    else totalFardos += Number(l.total) || 0;
     return `<tr><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
       <td>${p?equivalent(l.total,p):l.total}</td>
       <td>${pd.pallets}</td>
       <td>${pd.loose}</td></tr>`;
   }).join('');
+
+  if (o.requestLines && o.requestLines.length > 0) {
+    requests += `<tr><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
+      <td><b>${totalFardos} fardos</b></td><td colspan="2"></td></tr>`;
+  }
 
   let deliveries=(o.deliveries||[]).map((d,i)=>{
     let detail=(d.lines||[]).map(l=>{
