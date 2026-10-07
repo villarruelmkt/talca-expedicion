@@ -95,7 +95,7 @@ setTimeout(() => {
          for (let id of lastSyncedDb[col].keys()) {
             if (!currentIds.has(id)) {
                let dRef = firestoreDb.collection(col).doc(id);
-               dRef.delete().catch(err => dRef.update({ _deleted: true }).catch(console.error));
+               dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
                lastSyncedDb[col].delete(id);
             }
          }
@@ -127,10 +127,7 @@ function save(){
       for (let id of lastSyncedDb[col].keys()) {
          if (!currentIds.has(id)) {
             let dRef = firestoreDb.collection(col).doc(id);
-            dRef.delete().catch(err => {
-               console.warn('Fallback to soft delete for', id);
-               dRef.update({ _deleted: true }).catch(console.error);
-            });
+            dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
             lastSyncedDb[col].delete(id);
          }
       }

@@ -139,11 +139,11 @@ function deleteOrder(id){
     if (typeof firestoreDb !== 'undefined') {
       deletedMovements.forEach(m => {
         let dRef = firestoreDb.collection('movements').doc(m.id);
-        dRef.delete().catch(e => dRef.update({ _deleted: true }).catch(console.error));
+        dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
       });
       deletedMaterialMoves.forEach(m => {
         let dRef = firestoreDb.collection('materialMoves').doc(m.id);
-        dRef.delete().catch(e => dRef.update({ _deleted: true }).catch(console.error));
+        dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
       });
     }
   }
@@ -152,7 +152,7 @@ function deleteOrder(id){
   db.orders = (db.orders || []).filter(x => x.id !== id);
   if (typeof firestoreDb !== 'undefined') {
     let dRef = firestoreDb.collection('orders').doc(id);
-    dRef.delete().catch(e => dRef.update({ _deleted: true }).catch(console.error));
+    dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
   }
 
   // 4. Registrar en auditoría
