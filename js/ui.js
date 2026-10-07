@@ -1034,7 +1034,6 @@ v13TypeOptions=function(selected='administrative'){
   return html;
 };
 v11OrderStatus=function(o){
-  if(o.pendingType==='administrative')return 'PENDIENTE';
   if(o.pendingType==='cancelled')return 'Anulada';
   if(o.pendingType==='immediate')return o.status||'Despachada';
   let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o);
@@ -1042,6 +1041,7 @@ v11OrderStatus=function(o){
   if(outstanding===0)return 'Despachada';
   if(substitution)return 'Pendiente de definición';
   if(delivered>0)return 'Parcialmente despachada';
+  if(o.pendingType==='administrative')return 'PENDIENTE';
   return 'Pendiente de despacho';
 };
 
