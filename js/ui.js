@@ -2010,12 +2010,28 @@ function v16PrintOrder(id){
   let status=Array.isArray(o.requestLines)?v11OrderStatus(o):(o.status||'');
   let type=V11_PENDING_LABELS[o.pendingType||'legacy']||'Histórica';
 
+  function formatPallets(total, prod) {
+    if (!prod || !prod.pack) return { pallets: 0, loose: `${total} un.` };
+    let perPallet = prod.pack * (prod.perCut || 20) * (prod.cuts || 4);
+    if (perPallet > 0) {
+      let pallets = Math.floor(total / perPallet);
+      let rem = total % perPallet;
+      let fardos = Math.floor(rem / prod.pack);
+      let un = rem % prod.pack;
+      let loose = `${fardos} fardos${un > 0 ? ' + ' + un + ' un.' : ''}`;
+      if(fardos === 0 && un === 0) loose = '0 fardos';
+      return { pallets: pallets, loose: loose };
+    }
+    return { pallets: 0, loose: `${Math.floor(total/prod.pack)} fardos${total%prod.pack?' + '+total%prod.pack+' un.':''}` };
+  }
+
   let requests=(o.requestLines||[]).map(l=>{
     let p=db.products.find(x=>x.id===l.productId);
+    let pd = formatPallets(l.total, p);
     return `<tr><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
       <td>${p?equivalent(l.total,p):l.total}</td>
-      <td>${p?equivalent(Math.min(l.total,l.resolvedTotal||0),p):''}</td>
-      <td>${p?equivalent(v11LineOutstanding(l),p):''}</td></tr>`;
+      <td>${pd.pallets}</td>
+      <td>${pd.loose}</td></tr>`;
   }).join('');
 
   let deliveries=(o.deliveries||[]).map((d,i)=>{
@@ -2038,7 +2054,7 @@ function v16PrintOrder(id){
       <div><b>Turno / encargado</b><br>${v14Text(o.createdShift||'')} · ${v14Text(o.createdBy||'')}</div>
     </div>
     <h2>Productos solicitados</h2>
-    <table><thead><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Resuelto</th><th>Pendiente</th></tr></thead>
+    <table><thead><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
     <tbody>${requests||'<tr><td colspan="5">Sin detalle disponible.</td></tr>'}</tbody></table>
     <h2 style="margin-top:16px">Salidas registradas</h2>
     <table><thead><tr><th>#</th><th>Fecha</th><th>Productos</th><th>Planch. sale</th><th>Planch. vuelve</th><th>Chap. sale</th><th>Chap. vuelve</th></tr></thead>
