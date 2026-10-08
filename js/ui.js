@@ -2009,20 +2009,22 @@ function v16PrintOrder(id){
   }
 
   let totalFardos = 0;
+  let totalPallets = 0;
   let requests=(o.requestLines||[]).map(l=>{
     let p=db.products.find(x=>x.id===l.productId);
     let pd = formatPallets(l.total, p);
     if (p && p.pack) totalFardos += Math.floor(l.total / p.pack);
     else totalFardos += Number(l.total) || 0;
-    return `<tr><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
+    totalPallets += pd.pallets;
+    return `<tr style="font-size:1.8em; font-weight:bold;"><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
       <td>${p?equivalent(l.total,p):l.total}</td>
       <td>${pd.pallets}</td>
       <td>${pd.loose}</td></tr>`;
   }).join('');
 
   if (o.requestLines && o.requestLines.length > 0) {
-    requests += `<tr><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
-      <td><b>${totalFardos} fardos</b></td><td colspan="2"></td></tr>`;
+    requests += `<tr style="font-size:1.8em; font-weight:bold; background-color:#eee;"><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
+      <td><b>${totalFardos} fardos</b></td><td><b>${totalPallets} pallets</b></td><td></td></tr>`;
   }
 
   let deliveries=(o.deliveries||[]).map((d,i)=>{
@@ -2035,23 +2037,25 @@ function v16PrintOrder(id){
       <td>${Number(d.chapOut||0)}</td><td>${Number(d.chapIn||0)}</td></tr>`;
   }).join('');
 
+  let fName = v14Text(v13CarrierDisplay(f));
+  
   let body=`<div class="v16-order-print">
-    <div class="meta">
-      <div><b>Orden</b><br>${v14Text(o.number)}</div>
-      <div><b>Fecha</b><br>${v14Text(o.date)}</div>
-      <div><b>Fletero</b><br>${v14Text(v13CarrierDisplay(f))}</div>
-      <div><b>Tipo</b><br>${v14Text(type)}</div>
-      <div><b>Estado</b><br>${v14Text(status)}</div>
-      <div><b>Turno / encargado</b><br>${v14Text(o.createdShift||'')} · ${v14Text(o.createdBy||'')}</div>
+    <div style="font-size:1.1em; color:#333; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #ccc;">
+      <b>Fecha:</b> ${v14Text(o.date)} &nbsp;|&nbsp; 
+      <b>Estado:</b> ${v14Text(status)} &nbsp;|&nbsp; 
+      <b>Turno:</b> ${v14Text(o.createdShift||'')} · ${v14Text(o.createdBy||'')}
     </div>
     <h2>Productos solicitados</h2>
-    <table><thead><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
-    <tbody>${requests||'<tr><td colspan="5">Sin detalle disponible.</td></tr>'}</tbody></table>
-    <h2 style="margin-top:16px">Salidas registradas</h2>
+    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+      <thead style="font-size:1.4em;"><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
+      <tbody>${requests||'<tr><td colspan="5">Sin detalle disponible.</td></tr>'}</tbody>
+    </table>
+    <h2 style="margin-top:24px">Salidas registradas</h2>
     <table><thead><tr><th>#</th><th>Fecha</th><th>Productos</th><th>Planch. sale</th><th>Planch. vuelve</th><th>Chap. sale</th><th>Chap. vuelve</th></tr></thead>
     <tbody>${deliveries||'<tr><td colspan="7">Sin salidas confirmadas.</td></tr>'}</tbody></table>
   </div>`;
-  setPrintableDocument(`Orden de carga ${o.number}`,body,'order');
+  
+  setPrintableDocument(`<div style="font-size: 0.9em; margin-bottom: 5px;">Fletero: ${fName}</div>Orden de carga ${o.number}`,body,'order');
   printCurrentDocument();
 }
 
