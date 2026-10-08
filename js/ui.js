@@ -2016,14 +2016,14 @@ function v16PrintOrder(id){
     if (p && p.pack) totalFardos += Math.floor(l.total / p.pack);
     else totalFardos += Number(l.total) || 0;
     totalPallets += pd.pallets;
-    return `<tr style="font-size:1.8em; font-weight:bold;"><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
+    return `<tr style="font-size:2.2em; font-weight:bold;"><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
       <td>${p?equivalent(l.total,p):l.total}</td>
       <td>${pd.pallets}</td>
       <td>${pd.loose}</td></tr>`;
   }).join('');
 
   if (o.requestLines && o.requestLines.length > 0) {
-    requests += `<tr style="font-size:1.8em; font-weight:bold; background-color:#eee;"><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
+    requests += `<tr style="font-size:2.2em; font-weight:bold; background-color:#eee;"><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
       <td><b>${totalFardos} fardos</b></td><td><b>${totalPallets} pallets</b></td><td></td></tr>`;
   }
 
@@ -2040,6 +2040,9 @@ function v16PrintOrder(id){
   let fName = v14Text(v13CarrierDisplay(f));
   
   let body=`<div class="v16-order-print">
+    <div style="font-size:1.6em; color:#19417f; margin-bottom:10px; font-weight:bold;">
+      Fletero: ${fName}
+    </div>
     <div style="font-size:1.1em; color:#333; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #ccc;">
       <b>Fecha:</b> ${v14Text(o.date)} &nbsp;|&nbsp; 
       <b>Estado:</b> ${v14Text(status)} &nbsp;|&nbsp; 
@@ -2047,7 +2050,7 @@ function v16PrintOrder(id){
     </div>
     <h2>Productos solicitados</h2>
     <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
-      <thead style="font-size:1.4em;"><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
+      <thead style="font-size:1.6em;"><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
       <tbody>${requests||'<tr><td colspan="5">Sin detalle disponible.</td></tr>'}</tbody>
     </table>
     <h2 style="margin-top:24px">Salidas registradas</h2>
@@ -2055,7 +2058,7 @@ function v16PrintOrder(id){
     <tbody>${deliveries||'<tr><td colspan="7">Sin salidas confirmadas.</td></tr>'}</tbody></table>
   </div>`;
   
-  setPrintableDocument(`<div style="font-size: 0.9em; margin-bottom: 5px;">Fletero: ${fName}</div>Orden de carga ${o.number}`,body,'order');
+  setPrintableDocument(`Orden de carga ${o.number}`,body,'order');
   printCurrentDocument();
 }
 
