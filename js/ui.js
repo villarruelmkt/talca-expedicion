@@ -2018,14 +2018,14 @@ function v16PrintOrder(id){
     if (p && p.pack) totalFardos += Math.floor(l.total / p.pack);
     else totalFardos += Number(l.total) || 0;
     totalPallets += pd.pallets;
-    return `<tr style="font-size:2.6em; font-weight:bold;"><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
+    return `<tr><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
       <td>${p?equivalent(l.total,p):l.total}</td>
       <td>${pd.pallets}</td>
       <td>${pd.loose}</td></tr>`;
   }).join('');
 
   if (o.requestLines && o.requestLines.length > 0) {
-    requests += `<tr style="font-size:2.6em; font-weight:bold; background-color:#eee;"><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
+    requests += `<tr class="total-row"><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
       <td><b>${totalFardos} fardos</b></td><td><b>${totalPallets} pallets</b></td><td></td></tr>`;
   }
 
@@ -2041,15 +2041,21 @@ function v16PrintOrder(id){
 
   let fName = v14Text(v13CarrierDisplay(f));
   
-  let body=`<div class="v16-order-print">
+  let body=`
+  <style>
+    #printArea .v16-order-print .req-table th, 
+    #printArea .v16-order-print .req-table td { font-size: 18px !important; padding: 10px 8px !important; font-weight: bold !important; }
+    #printArea .v16-order-print .req-table .total-row td { font-size: 20px !important; background-color: #eee !important; }
+  </style>
+  <div class="v16-order-print">
     <div style="font-size:1.1em; color:#333; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #ccc;">
       <b>Fecha:</b> ${v14Text(o.date)} &nbsp;|&nbsp; 
       <b>Estado:</b> ${v14Text(status)} &nbsp;|&nbsp; 
       <b>Turno:</b> ${v14Text(o.createdShift||'')} · ${v14Text(o.createdBy||'')}
     </div>
     <h2>Productos solicitados</h2>
-    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
-      <thead style="font-size:2em;"><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
+    <table class="req-table" style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+      <thead><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
       <tbody>${requests||'<tr><td colspan="5">Sin detalle disponible.</td></tr>'}</tbody>
     </table>
     <h2 style="margin-top:24px">Salidas registradas</h2>
