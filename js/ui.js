@@ -1898,10 +1898,11 @@ function v16AttachMaterialKeyboard(sequence,afterId){
 // ------------------------------------------------------------------
 // IMPRESIÓN: un único sistema y limpieza del documento previo
 // ------------------------------------------------------------------
-setPrintableDocument=function(title,bodyHtml,kind='report'){
+setPrintableDocument=function(title,bodyHtml,kind='report', subtitle=''){
   currentPrintTitle=title||'Documento';
   currentPrintBody=bodyHtml||'';
   currentPrintKind=kind||'report';
+  window.currentPrintSubtitle = subtitle;
 };
 function v16PrintLogo(){
   return document.querySelector('.top-logo')?.src||document.querySelector('.brand-logo')?.src||'';
@@ -1915,6 +1916,7 @@ renderPrintArea=function(){
   let logo=v16PrintLogo();
   area.innerHTML=`<div class="v16-print-brand">
     <img src="${logo}" alt="Talca">
+    ${window.currentPrintSubtitle ? `<h2 style="margin:0; font-size:22px; color:#19417f;">${v14Text(window.currentPrintSubtitle)}</h2>` : ''}
     <h1>${v14Text(currentPrintTitle)}</h1>
   </div>${currentPrintBody}`;
 };
@@ -2040,9 +2042,6 @@ function v16PrintOrder(id){
   let fName = v14Text(v13CarrierDisplay(f));
   
   let body=`<div class="v16-order-print">
-    <div style="font-size:1.6em; color:#19417f; margin-bottom:10px; font-weight:bold;">
-      Fletero: ${fName}
-    </div>
     <div style="font-size:1.1em; color:#333; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #ccc;">
       <b>Fecha:</b> ${v14Text(o.date)} &nbsp;|&nbsp; 
       <b>Estado:</b> ${v14Text(status)} &nbsp;|&nbsp; 
@@ -2058,7 +2057,7 @@ function v16PrintOrder(id){
     <tbody>${deliveries||'<tr><td colspan="7">Sin salidas confirmadas.</td></tr>'}</tbody></table>
   </div>`;
   
-  setPrintableDocument(`Orden de carga ${o.number}`,body,'order');
+  setPrintableDocument(`Orden de carga ${o.number}`,body,'order', `Fletero: ${fName}`);
   printCurrentDocument();
 }
 
