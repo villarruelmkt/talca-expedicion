@@ -2044,22 +2044,22 @@ function v16PrintOrder(id){
   let body=`
   <style>
     #printArea .v16-order-print .req-table th, 
-    #printArea .v16-order-print .req-table td { font-size: 18px !important; padding: 10px 8px !important; font-weight: bold !important; }
-    #printArea .v16-order-print .req-table .total-row td { font-size: 20px !important; background-color: #eee !important; }
+    #printArea .v16-order-print .req-table td { font-size: 13px !important; padding: 4px 6px !important; font-weight: bold !important; }
+    #printArea .v16-order-print .req-table .total-row td { font-size: 14px !important; background-color: #eee !important; }
   </style>
   <div class="v16-order-print">
-    <div style="font-size:1.1em; color:#333; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid #ccc;">
+    <div style="font-size:13px; color:#333; margin-bottom:10px; padding-bottom:5px; border-bottom:1px solid #ccc;">
       <b>Fecha:</b> ${v14Text(o.date)} &nbsp;|&nbsp; 
       <b>Estado:</b> ${v14Text(status)} &nbsp;|&nbsp; 
       <b>Turno:</b> ${v14Text(o.createdShift||'')} · ${v14Text(o.createdBy||'')}
     </div>
-    <h2>Productos solicitados</h2>
-    <table class="req-table" style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+    <h2 style="margin:10px 0 5px 0; font-size:16px;">Productos solicitados</h2>
+    <table class="req-table" style="width:100%; border-collapse:collapse; margin-bottom:10px;">
       <thead><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
       <tbody>${requests||'<tr><td colspan="5">Sin detalle disponible.</td></tr>'}</tbody>
     </table>
-    <h2 style="margin-top:24px">Salidas registradas</h2>
-    <table><thead><tr><th>#</th><th>Fecha</th><th>Productos</th><th>Planch. sale</th><th>Planch. vuelve</th><th>Chap. sale</th><th>Chap. vuelve</th></tr></thead>
+    <h2 style="margin:15px 0 5px 0; font-size:16px;">Salidas registradas</h2>
+    <table style="width:100%; border-collapse:collapse;"><thead><tr><th>#</th><th>Fecha</th><th>Productos</th><th>Planch. sale</th><th>Planch. vuelve</th><th>Chap. sale</th><th>Chap. vuelve</th></tr></thead>
     <tbody>${deliveries||'<tr><td colspan="7">Sin salidas confirmadas.</td></tr>'}</tbody></table>
   </div>`;
   
