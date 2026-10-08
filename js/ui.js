@@ -2020,13 +2020,13 @@ function v16PrintOrder(id){
     totalPallets += pd.pallets;
     return `<tr><td>${v14Text(p?.id||l.productId)}</td><td>${v14Text(p?.name||l.productId)}</td>
       <td>${p?equivalent(l.total,p):l.total}</td>
-      <td>${pd.pallets}</td>
+      <td style="text-align:center;">${pd.pallets}</td>
       <td>${pd.loose}</td></tr>`;
   }).join('');
 
   if (o.requestLines && o.requestLines.length > 0) {
     requests += `<tr class="total-row"><td colspan="2" style="text-align:right"><b>TOTAL</b></td>
-      <td><b>${totalFardos} fardos</b></td><td><b>${totalPallets} pallets</b></td><td></td></tr>`;
+      <td><b>${totalFardos} fardos</b></td><td style="text-align:center;"><b>${totalPallets} pallets</b></td><td></td></tr>`;
   }
 
   let deliveries=(o.deliveries||[]).map((d,i)=>{
@@ -2044,8 +2044,8 @@ function v16PrintOrder(id){
   let body=`
   <style>
     #printArea .v16-order-print .req-table th, 
-    #printArea .v16-order-print .req-table td { font-size: 13px !important; padding: 4px 6px !important; font-weight: bold !important; }
-    #printArea .v16-order-print .req-table .total-row td { font-size: 14px !important; background-color: #eee !important; }
+    #printArea .v16-order-print .req-table td { font-size: 14px !important; padding: 4px 6px !important; font-weight: bold !important; }
+    #printArea .v16-order-print .req-table .total-row td { font-size: 15px !important; background-color: #eee !important; }
   </style>
   <div class="v16-order-print">
     <div style="font-size:13px; color:#333; margin-bottom:10px; padding-bottom:5px; border-bottom:1px solid #ccc;">
@@ -2055,7 +2055,7 @@ function v16PrintOrder(id){
     </div>
     <h2 style="margin:10px 0 5px 0; font-size:16px;">Productos solicitados</h2>
     <table class="req-table" style="width:100%; border-collapse:collapse; margin-bottom:10px;">
-      <thead><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th>Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
+      <thead><tr><th>Código</th><th>Producto</th><th>Solicitado</th><th style="text-align:center;">Pallets completos</th><th>Fardos / sueltos</th></tr></thead>
       <tbody>${requests||'<tr><td colspan="5">Sin detalle disponible.</td></tr>'}</tbody>
     </table>
     <h2 style="margin:15px 0 5px 0; font-size:16px;">Salidas registradas</h2>
