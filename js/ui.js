@@ -1089,7 +1089,7 @@ window.renderStockV1 = function renderStockV1(){
       ?'<span class="status partial">Sin pendientes</span>'
       :`<span class="status ${state==='Insuficiente'?'danger':'done'}">${pct.toFixed(1)}%</span><br><span class="muted">${state}</span>`;
     return `<tr>
-      <td><b>${v14Text(p.id)}</b>${p.alias?` · <span class="status partial">${v14Text(p.alias)}</span>`:''}<br>${v14Text(p.name)}</td>
+      <td><span class="no-print"><b>${v14Text(p.id)}</b>${p.alias?` · <span class="status partial">${v14Text(p.alias)}</span>`:''}<br></span><span class="v16-stock-name">${v14Text(p.name)}</span></td>
       <td>${equivalent(b.physical,p)}<span class="no-print"><br><span class="muted">Entregable: ${equivalent(deliverable,p)}</span></span></td>
       <td>${equivalent(b.preventa,p)}</td><td>${equivalent(b.distriC,p)}</td><td>${equivalent(b.distriInterior,p)}</td>
       <td>${equivalent(b.sinCodificar,p)}</td><td>${equivalent(b.oesteMendoza,p)}</td><td>${equivalent(b.oesteJeremias,p)}</td>
@@ -1961,10 +1961,12 @@ printSection=function(id,title){
     el.style.overflow='visible';
   });
   let extraStyle='';
+  let headerHtml='';
   if(id==='stock'){
-    extraStyle='<style>@page{margin:10mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:4px 6px!important;}</style>';
+    extraStyle='<style>@page{margin:10mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:4px 6px!important;} #printArea .v16-stock-name{font-weight:bold;font-size:12px;}</style>';
+    headerHtml=`<div style="margin-bottom:12px;font-size:13px;color:#333;"><b>Impreso:</b> ${fmtDate(now())} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(session.user)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(session.shift)}</div>`;
   }
-  setPrintableDocument(title,extraStyle+clone.innerHTML,'report');
+  setPrintableDocument(title,extraStyle+headerHtml+clone.innerHTML,'report');
   printCurrentDocument();
 };
 
