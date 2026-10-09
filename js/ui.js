@@ -248,7 +248,10 @@ function savePendingDispatchV11(orderId){
    let req=v11FindRequestLine(o,l.sourceProductId);if(req&&l.productId===l.sourceProductId){let applied=Math.min(v11LineOutstanding(req),l.total);req.resolvedTotal=Number(req.resolvedTotal||0)+applied;v11DecreasePending(o.pendingType,l.sourceProductId,applied)}
  });
  let delivery={id:uid('d'),date:now(),lines,result:'Salida confirmada',note:document.getElementById('v11DispatchNote').value,stockJustification:just,user:session.user,shift:session.shift};
- o.deliveries.push(delivery);if(lines.some(l=>l.productId!==l.sourceProductId))o.billing='Pendiente de aviso';o.status=v11OrderStatus(o);audit('Salida','Orden',o.number,o.status);save();closeModal();showPage('orders')
+ let oldStatus = o.status;
+ o.deliveries.push(delivery);if(lines.some(l=>l.productId!==l.sourceProductId))o.billing='Pendiente de aviso';o.status=v11OrderStatus(o);
+ if ((o.status === 'Despachada' || o.status === 'Completa') && oldStatus !== o.status) { o.date = now().slice(0, 10); }
+ audit('Salida','Orden',o.number,o.status);save();closeModal();showPage('orders')
 }
 
 
@@ -909,9 +912,11 @@ function v13SaveOrder(){
   }else if(type==='cancelled'){
     o.status='Anulada';
   }else if(v13IsOperational(type)){
+    let oldStatus = o.status;
     let newOutstanding=v13MapOutstanding(o);
     v13ApplyOutstanding(type,newOutstanding,1);
     o.status=v11OrderStatus(o);
+    if ((o.status === 'Despachada' || o.status === 'Completa') && oldStatus !== o.status) o.date = now().slice(0, 10);
   }else{
     let actualMap=v13AggregateActualFromLines(formLines);
     if(!Object.values(actualMap).some(v=>v>0)){
@@ -942,7 +947,9 @@ function v13SaveOrder(){
       chapOut:0,chapIn:0
     };
     o.deliveries=[delivery];
+    let prevStatus = o.status;
     o.status=v11OrderOutstanding(o)>0?'Parcial':'Despachada';
+    if ((o.status === 'Despachada' || o.status === 'Completa') && prevStatus !== o.status) o.date = now().slice(0, 10);
     v13UpdateMaterialMove(o,oldNumber,delivery);
   }
 
