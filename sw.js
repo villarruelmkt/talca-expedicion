@@ -1,4 +1,4 @@
-const CACHE_NAME = 'talca-cache-v12';
+const CACHE_NAME = 'talca-cache-v13';
 const urlsToCache = [
   './',
   './index.html',
@@ -37,30 +37,22 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Devuelve del caché si se encuentra, o hace fetch a la red
-        if (response) {
-          return response;
-        }
-        return fetch(event.request).then(
-          function(response) {
-            // Verificar si recibimos una respuesta válida
-            if(!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
+    fetch(event.request).then(response => {
+      // Verificar si recibimos una respuesta válida
+      if(!response || response.status !== 200 || response.type !== 'basic') {
+        return response;
+      }
 
-            // Clonar la respuesta para guardarla en el caché
-            var responseToCache = response.clone();
+      // Clonar la respuesta para guardarla en el caché
+      var responseToCache = response.clone();
+      caches.open(CACHE_NAME).then(cache => {
+        cache.put(event.request, responseToCache);
+      });
 
-            caches.open(CACHE_NAME)
-              .then(function(cache) {
-                cache.put(event.request, responseToCache);
-              });
-
-            return response;
-          }
-        );
-      })
+      return response;
+    }).catch(() => {
+      // Si falla la red, intentar buscar en el caché
+      return caches.match(event.request);
+    })
   );
 });
