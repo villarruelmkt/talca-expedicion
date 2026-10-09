@@ -132,9 +132,31 @@ function renderMaterials() {
   
   materialsBody.innerHTML = [...list].reverse().map(m => {
     let f = db.fleteros.find(x => x.id === m.fleteroId);
-    return `<tr><td>${fmtDate(m.date)}</td><td>${f?.name || ''}</td><td>${m.ref}</td><td>${m.source}</td><td>${m.palletOut}</td><td>${m.palletIn}</td><td>${m.chapOut}</td><td>${m.chapIn}</td><td>Pallets: ${m.palletOut - m.palletIn}; Chapadur: ${m.chapOut - m.chapIn}</td></tr>`
+    let annulBtn = (!m.annulled && !m.source.startsWith('Anulación')) ? `<button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="annulMaterialMove('${m.id}')">Anular</button>` : '';
+    let stateHtml = m.annulled ? '<br><b class="danger">ANULADO</b>' : '';
+    return `<tr><td>${fmtDate(m.date)}${stateHtml}</td><td>${f?.name || ''}</td><td>${m.ref}</td><td>${m.source}</td><td>${m.palletOut}</td><td>${m.palletIn}</td><td>${m.chapOut}</td><td>${m.chapIn}</td><td>Pallets: ${m.palletOut - m.palletIn}; Chapadur: ${m.chapOut - m.chapIn}<br>${annulBtn}</td></tr>`
   }).join('');
 }
+
+window.annulMaterialMove = function(id) {
+  let m = db.materialMoves.find(x => x.id === id);
+  if (!m || m.annulled) return;
+  customConfirm('¿Estás seguro de que deseas anular este movimiento de materiales? Esto generará un movimiento inverso para corregir la cuenta corriente del fletero.', () => {
+    addMaterialMove({
+      fleteroId: m.fleteroId,
+      ref: m.ref + ' (Anul.)',
+      source: 'Anulación de ' + m.source,
+      palletOut: -m.palletOut,
+      palletIn: -m.palletIn,
+      chapOut: -m.chapOut,
+      chapIn: -m.chapIn
+    });
+    m.annulled = true;
+    save();
+    renderMaterials();
+    toast('Movimiento anulado correctamente');
+  });
+};
 
 function reservedForProduct(productId){
  return db.orders.filter(o=>['Recibida','Carga iniciada','Parcial','Pendiente de control'].includes(o.status)).reduce((sum,o)=>{
