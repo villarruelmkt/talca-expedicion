@@ -57,10 +57,41 @@ function renderEmployeeWorkbench(){
  </div>
  <div class="card" style="margin-top:14px">
    <h3>Historial reciente</h3>
-   <div class="mini-history">${moves.length?moves.slice(0,20).map(m=>{let p=db.products.find(x=>x.id===m.productId);return `<div style="padding:9px 0;border-bottom:1px solid var(--line)"><b>${m.type.startsWith('Consumo')?'Consumo':'Anticipo'}</b> · ${p?.name||''} · ${equivalent(m.total,p)}<br><span class="muted">${fmtDate(m.date)} · ${m.user} · Turno ${m.shift}</span></div>`}).join(''):'<span class="muted">Todavía no registra consumos ni anticipos.</span>'}</div>
+   <div class="mini-history">${moves.length?moves.slice(0,20).map(m=>{let p=db.products.find(x=>x.id===m.productId);return `<div style="padding:9px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;"><div><b>${m.type.startsWith('Consumo')?'Consumo':'Anticipo'}</b> · ${p?.name||''} · ${equivalent(m.total,p)}<br><span class="muted">${fmtDate(m.date)} · ${m.user} · Turno ${m.shift}${m.annulled?' <b class="danger">ANULADO</b>':''}</span></div>${!m.annulled?`<button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="annulEmployeeMove('${m.id}')">Anular</button>`:''}</div>`}).join(''):'<span class="muted">Todavía no registra consumos ni anticipos.</span>'}</div>
  </div>`;
  addWorkbenchAdvanceLine()
 }
+window.annulEmployeeMove = function(moveId) {
+  let m = db.movements.find(x => x.id === moveId);
+  if (!m || m.annulled) return;
+  customConfirm(`¿Estás seguro de que deseas anular este ${m.type.startsWith('Consumo')?'consumo':'anticipo'}? La mercadería volverá al stock físico.`, () => {
+    let p = db.products.find(x => x.id === m.productId);
+    
+    // Devolver al stock
+    addStockMove({
+      type: 'Anulación ' + (m.type.startsWith('Consumo') ? 'consumo' : 'anticipo'),
+      ref: m.ref,
+      productId: m.productId,
+      total: m.total,
+      dir: 'in',
+      note: 'Anulación de movimiento ' + moveId
+    });
+
+    // Restaurar balance si era consumo
+    if (m.type.startsWith('Consumo')) {
+      let e = db.employees.find(x => x.id === selectedEmployeeId);
+      if (e && p) {
+        let packs = m.total / p.pack;
+        e.balance = (e.balance || 0) + packs;
+      }
+    }
+
+    m.annulled = true;
+    save();
+    renderEmployeeWorkbench();
+    toast('Movimiento anulado correctamente');
+  });
+};
 function addWorkbenchAdvanceLine(){
  let box=document.getElementById('wbAdvanceLines');if(!box)return;
  let d=document.createElement('div');d.className='line';
