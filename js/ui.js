@@ -1999,6 +1999,10 @@ printSection=function(id,title){
     extraStyle='<style>@page{margin:10mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:4px 6px!important;} #printArea .v16-stock-name{font-weight:bold;font-size:12px;}</style>';
     headerHtml=`<div style="margin-bottom:12px;font-size:13px;color:#333;"><b>Impreso:</b> ${fmtDate(now())} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(session.user)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(session.shift)}</div>`;
   }
+  if(id==='orders'){
+    let summaryHtml = generateOrdersDispatchSummaryHtml();
+    clone.innerHTML += summaryHtml;
+  }
   setPrintableDocument(title,extraStyle+headerHtml+clone.innerHTML,'report');
   printCurrentDocument();
 };
@@ -2250,3 +2254,83 @@ function saveShiftMaterials() {
   renderMaterials();
 }
 
+function generateOrdersDispatchSummaryHtml() {
+  let carrier=document.getElementById('ofCarrier')?.value||'',
+      date=document.getElementById('ofDate')?.value||'',
+      user=document.getElementById('ofUser')?.value||'',
+      shift=document.getElementById('ofShift')?.value||'';
+
+  let qtyByProduct = {};
+  function addFardos(pid, physicalQty) {
+    if (!physicalQty) return;
+    let p = db.products.find(x => x.id === pid);
+    if (!p) return;
+    let fardos = v15FardosEquivalent(physicalQty, p);
+    qtyByProduct[pid] = (qtyByProduct[pid] || 0) + fardos;
+  }
+
+  let list=(db.orders||[]).filter(o=>{
+    let ds=o.deliveries||[];
+    return(!carrier||o.fleteroId===carrier)&&
+          (!date||o.date===date)&&
+          (!user||o.createdBy===user||ds.some(d=>d.user===user))&&
+          (!shift||o.createdShift===shift||ds.some(d=>d.shift===shift));
+  });
+
+  list.forEach(o => {
+    (o.deliveries||[]).forEach(d => {
+      (d.lines||[]).forEach(l => {
+        addFardos(l.productId, l.total);
+      });
+    });
+  });
+
+  if (!carrier) {
+    let moves = (db.movements||[]).filter(m => {
+      if (m.annulled || m.dir !== 'out') return false;
+      let isMendoza = m.type.startsWith('Envío a Mendoza') || m.type.startsWith('Transferencia') || m.type.startsWith('Envío a San Juan');
+      let isEmp = m.type.startsWith('Consumo') || m.type.startsWith('Anticipo');
+      if (!isMendoza && !isEmp) return false;
+      
+      if (date && m.date.slice(0,10) !== date) return false;
+      if (user && m.user !== user) return false;
+      if (shift && m.shift !== shift) return false;
+      return true;
+    });
+    moves.forEach(m => addFardos(m.productId, m.total));
+  }
+
+  let pids = Object.keys(qtyByProduct).sort();
+  if (!pids.length) return '';
+
+  let html = `<div style="page-break-inside: avoid; margin-top: 20px;">
+    <h3 style="margin-bottom: 8px;">Total Despachado por Producto</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 11px;" border="1">
+      <thead>
+        <tr style="background: var(--soft)">
+          <th style="padding: 4px; text-align: left;">Cód.</th>
+          <th style="padding: 4px; text-align: left;">Producto</th>
+          <th style="padding: 4px; text-align: right;">Cantidad entregada</th>
+        </tr>
+      </thead>
+      <tbody>`;
+  
+  let totalBultos = 0;
+  pids.forEach(pid => {
+    let p = db.products.find(x => x.id === pid);
+    let qty = qtyByProduct[pid];
+    totalBultos += qty;
+    html += `<tr>
+      <td style="padding: 4px;">${pid}</td>
+      <td style="padding: 4px;">${v14Text(p.name)}</td>
+      <td style="padding: 4px; text-align: right;">${v15FormatFardos(qty * p.pack)}</td>
+    </tr>`;
+  });
+
+  html += `<tr style="background: var(--soft); font-weight: bold;">
+    <td colspan="2" style="padding: 4px; text-align: right;">TOTAL GENERAL</td>
+    <td style="padding: 4px; text-align: right;">${totalBultos.toFixed(1).replace(/\\.0$/, '')} fardos</td>
+  </tr></tbody></table></div>`;
+  
+  return html;
+}
