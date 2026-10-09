@@ -1090,7 +1090,7 @@ window.renderStockV1 = function renderStockV1(){
       :`<span class="status ${state==='Insuficiente'?'danger':'done'}">${pct.toFixed(1)}%</span><br><span class="muted">${state}</span>`;
     return `<tr>
       <td><b>${v14Text(p.id)}</b>${p.alias?` · <span class="status partial">${v14Text(p.alias)}</span>`:''}<br>${v14Text(p.name)}</td>
-      <td>${equivalent(b.physical,p)}<br><span class="muted">Entregable: ${equivalent(deliverable,p)}</span></td>
+      <td>${equivalent(b.physical,p)}<span class="no-print"><br><span class="muted">Entregable: ${equivalent(deliverable,p)}</span></span></td>
       <td>${equivalent(b.preventa,p)}</td><td>${equivalent(b.distriC,p)}</td><td>${equivalent(b.distriInterior,p)}</td>
       <td>${equivalent(b.sinCodificar,p)}</td><td>${equivalent(b.oesteMendoza,p)}</td><td>${equivalent(b.oesteJeremias,p)}</td>
       <td><b>${equivalent(total,p)}</b></td><td>${percentage}</td>
@@ -1098,7 +1098,7 @@ window.renderStockV1 = function renderStockV1(){
     </tr>`;
   }).join('');
   let globalPct=totals.pending===0?null:(totals.physical===0?0:((totals.physical-totals.pending)*100)/totals.physical);
-  let totalRow=`<tr class="v15-stock-total" style="background:var(--soft);font-weight:bold;border-top:2px solid var(--line);"><td>TOTAL</td><td>${v15FormatFardos(totals.physical)}<br><span class="muted" style="font-weight:normal">Entregable: ${v15FormatFardos(totals.deliverable)}</span></td><td>${v15FormatFardos(totals.preventa)}</td><td>${v15FormatFardos(totals.distriC)}</td><td>${v15FormatFardos(totals.distriInterior)}</td><td>${v15FormatFardos(totals.sinCodificar)}</td><td>${v15FormatFardos(totals.oesteMendoza)}</td><td>${v15FormatFardos(totals.oesteJeremias)}</td><td>${v15FormatFardos(totals.pending)}</td><td>${globalPct===null?'<span class="status partial" style="font-weight:normal">Sin pendientes</span>':`<b>${globalPct.toFixed(1)}%</b><br><span class="muted" style="font-weight:normal">Cobertura global</span>`}</td><td class="no-print"></td></tr>`;
+  let totalRow=`<tr class="v15-stock-total" style="background:var(--soft);font-weight:bold;border-top:2px solid var(--line);"><td>TOTAL</td><td>${v15FormatFardos(totals.physical)}<span class="no-print"><br><span class="muted" style="font-weight:normal">Entregable: ${v15FormatFardos(totals.deliverable)}</span></span></td><td>${v15FormatFardos(totals.preventa)}</td><td>${v15FormatFardos(totals.distriC)}</td><td>${v15FormatFardos(totals.distriInterior)}</td><td>${v15FormatFardos(totals.sinCodificar)}</td><td>${v15FormatFardos(totals.oesteMendoza)}</td><td>${v15FormatFardos(totals.oesteJeremias)}</td><td>${v15FormatFardos(totals.pending)}</td><td>${globalPct===null?'<span class="status partial" style="font-weight:normal">Sin pendientes</span>':`<b>${globalPct.toFixed(1)}%</b><br><span class="muted" style="font-weight:normal">Cobertura global</span>`}</td><td class="no-print"></td></tr>`;
   stockBody.innerHTML=rows+totalRow;
 };
 exportStockV1CSV=function(){
@@ -1960,7 +1960,11 @@ printSection=function(id,title){
     el.style.maxHeight='none';
     el.style.overflow='visible';
   });
-  setPrintableDocument(title,clone.innerHTML,'report');
+  let extraStyle='';
+  if(id==='stock'){
+    extraStyle='<style>@page{size:landscape;margin:10mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:4px 6px!important;}</style>';
+  }
+  setPrintableDocument(title,extraStyle+clone.innerHTML,'report');
   printCurrentDocument();
 };
 
