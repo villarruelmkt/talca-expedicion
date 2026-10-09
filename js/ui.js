@@ -1962,7 +1962,7 @@ printSection=function(id,title){
   });
   let extraStyle='';
   if(id==='stock'){
-    extraStyle='<style>@page{size:landscape;margin:10mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:4px 6px!important;}</style>';
+    extraStyle='<style>@page{margin:10mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:4px 6px!important;}</style>';
   }
   setPrintableDocument(title,extraStyle+clone.innerHTML,'report');
   printCurrentDocument();
