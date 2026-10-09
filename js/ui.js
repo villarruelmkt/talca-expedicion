@@ -498,11 +498,13 @@ renderEmployeeWorkbench=function(){
     <div class="mini-history">${
       history.length
       ?history.slice(0,20).map(g=>{
+        let isAnnulled = g.movements.every(m => m.annulled);
         let detail=g.movements.map(m=>{
           let p=db.products.find(x=>x.id===m.productId);
           return `${p?.name||m.productId}: ${p?equivalent(m.total,p):m.total}`;
         }).join(' · ');
-        return `<div class="history-operation"><b>${g.type}</b>${g.receiptNumber?` · ${g.receiptNumber}`:''}<br>${detail}<br><span class="muted">${fmtDate(g.date)} · ${g.user} · Turno ${g.shift}</span></div>`;
+        let annulBtn = !isAnnulled ? `<br><button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;margin-top:4px" onclick='annulEmployeeMoveGroup(${JSON.stringify(g.movements.map(m=>m.id))})'>Anular</button>` : '';
+        return `<div class="history-operation" style="padding:9px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;"><div><b>${g.type}</b>${g.receiptNumber?` · ${g.receiptNumber}`:''}<br>${detail}<br><span class="muted">${fmtDate(g.date)} · ${g.user} · Turno ${g.shift}${isAnnulled?' <b class="danger">ANULADO</b>':''}</span></div>${annulBtn}</div>`;
       }).join('')
       :'<span class="muted">Todavía no registra consumos ni anticipos.</span>'
     }</div>
@@ -511,6 +513,37 @@ renderEmployeeWorkbench=function(){
   addWorkbenchConsumptionLine();
   addWorkbenchAdvanceLine();
   updateWorkbenchConsumptionSummary();
+};
+
+window.annulEmployeeMoveGroup = function(moveIds) {
+  let toAnnul = moveIds.map(id => db.movements.find(x => x.id === id)).filter(m => m && !m.annulled);
+  if (!toAnnul.length) return;
+  let typeLabel = toAnnul[0].type.startsWith('Consumo') ? 'consumo' : 'anticipo';
+  
+  customConfirm(`¿Estás seguro de que deseas anular este ${typeLabel}? La mercadería volverá al stock físico.`, () => {
+    toAnnul.forEach(m => {
+      let p = db.products.find(x => x.id === m.productId);
+      addStockMove({
+        type: 'Anulación ' + (m.type.startsWith('Consumo') ? 'consumo' : 'anticipo'),
+        ref: m.ref,
+        productId: m.productId,
+        total: m.total,
+        dir: 'in',
+        note: 'Anulación de movimiento ' + m.id
+      });
+      if (m.type.startsWith('Consumo')) {
+        let e = db.employees.find(x => x.id === selectedEmployeeId);
+        if (e && p) {
+          let packs = m.total / p.pack;
+          e.balance = (e.balance || 0) + packs;
+        }
+      }
+      m.annulled = true;
+    });
+    save();
+    renderEmployeeWorkbench();
+    toast('Operación anulada correctamente');
+  });
 };
 
 showEmployeeReceipt=function(e,items,title,prefix,providedNumber=''){
