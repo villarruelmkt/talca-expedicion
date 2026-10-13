@@ -1,6 +1,31 @@
 // --- MODULE: GLOBAL STATE & CORE UTILS ---
 let db=load();
 
+// --- DEFINICIONES DE STOCK REAL VERIFICADO AL 13 DE OCTUBRE (CIERRE 20:00) ---
+const VERIFIED_STOCK_OCT13_2000 = {
+  "5670": 182265, "5675": 54264, "5680": 63457, "5685": 46402, "5690": 43657,
+  "5051": 19626,  "5056": 12969, "5061": 26419, "5066": 13184, "5071": 11482,
+  "8670": 21380,  "4900": 79688, "4171": 0,     "4910": 29820, "BIDON": 0,
+  "5200": 3614,   "5205": 3396,  "5210": 0,     "5215": 2046,  "5220": 1902,
+  "8687": 1262,   "8680": 66954, "417": 10019
+};
+const CORRECT_PRODUCT_PACKS = {
+  "5051": 12, "5056": 12, "5061": 12, "5066": 12, "5071": 12,
+  "8680": 12, "417": 12, "4171": 12, "8687": 1, "BIDON": 1
+};
+
+function applyVerifiedStockV22() {
+  if (!db) return;
+  (db.products || []).forEach(p => {
+    if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
+  });
+  db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+  if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
+  safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+  safeSet(localStorage, 'talca_stock_verified_v22', '1');
+}
+applyVerifiedStockV22();
+
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
 let lastSyncedDb = {
@@ -21,13 +46,24 @@ docRef.onSnapshot((doc) => {
     let cloudDb = doc.data();
     // Blindaje: Solo actualizar campos si la nube tiene datos reales y no vacíos
     if (cloudDb.stock && Object.keys(cloudDb.stock).length > 0) {
-      db.stock = cloudDb.stock;
+      // Blindaje: si la nube aún tiene stock antiguo previo a la reconstrucción, conservar el verificado y subirlo
+      if (cloudDb.stock['5670'] !== VERIFIED_STOCK_OCT13_2000['5670'] && !localStorage.getItem('talca_stock_pushed_v22')) {
+        console.warn('Blindaje: Se retiene el stock verificado frente a snapshot antiguo de Firestore.');
+        db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+        save();
+        localStorage.setItem('talca_stock_pushed_v22', '1');
+      } else {
+        db.stock = cloudDb.stock;
+      }
     }
     if (cloudDb.stockBuckets && Object.keys(cloudDb.stockBuckets).length > 0) {
       db.stockBuckets = cloudDb.stockBuckets;
     }
     if (cloudDb.products && cloudDb.products.length > 0) {
       db.products = mergeList(db.products, cloudDb.products);
+      (db.products || []).forEach(p => {
+        if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
+      });
     }
     if (cloudDb.fleteros && cloudDb.fleteros.length > 0) {
       db.fleteros = mergeList(db.fleteros, cloudDb.fleteros);

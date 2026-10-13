@@ -95,7 +95,7 @@
     {
       "id": "5051",
       "name": "Talca Cola 500 ml",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "CO5",
@@ -105,7 +105,7 @@
     {
       "id": "5056",
       "name": "Talca Lima Limón 500 ml",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "LI5",
@@ -115,7 +115,7 @@
     {
       "id": "5061",
       "name": "Talca Manzana 500 ml",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "MA5",
@@ -125,7 +125,7 @@
     {
       "id": "5066",
       "name": "Talca Naranja 500 ml",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "NA5",
@@ -135,7 +135,7 @@
     {
       "id": "5071",
       "name": "Talca Pomelo 500 ml",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "PO5",
@@ -165,7 +165,7 @@
     {
       "id": "4171",
       "name": "Soda 500 ml",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "",
@@ -185,7 +185,7 @@
     {
       "id": "BIDON",
       "name": "Bidón de agua",
-      "pack": 6,
+      "pack": 1,
       "perCut": 15,
       "cuts": 4,
       "alias": "",
@@ -245,7 +245,7 @@
     {
       "id": "8687",
       "name": "Bidón de agua",
-      "pack": 6,
+      "pack": 1,
       "perCut": 15,
       "cuts": 4,
       "alias": "BID",
@@ -255,7 +255,7 @@
     {
       "id": "8680",
       "name": "Agua 600 cc",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "AG6",
@@ -265,7 +265,7 @@
     {
       "id": "417",
       "name": "Soda 500 ml",
-      "pack": 6,
+      "pack": 12,
       "perCut": 15,
       "cuts": 4,
       "alias": "SO5",
@@ -1022,8 +1022,9 @@
   ],
   "stock": {
     "417": 10019,
+    "4171": 0,
     "4900": 79688,
-    "4910": 31740,
+    "4910": 29820,
     "5051": 19626,
     "5056": 12969,
     "5061": 26419,
@@ -1034,14 +1035,14 @@
     "5210": 0,
     "5215": 2046,
     "5220": 1902,
-    "5670": 182637,
+    "5670": 182265,
     "5675": 54264,
-    "5680": 63463,
+    "5680": 63457,
     "5685": 46402,
     "5690": 43657,
     "8670": 21380,
     "8680": 66954,
-    "8687": 437,
+    "8687": 1262,
     "BIDON": 0
   },
   "stockBuckets": {
@@ -1055,6 +1056,15 @@
       "oesteJeremias": 0,
       "administrative": 0
     },
+    "4171": {
+      "physical": 0,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0
+    },
     "4900": {
       "physical": 79688,
       "preventa": 0,
@@ -1066,7 +1076,7 @@
       "administrative": 0
     },
     "4910": {
-      "physical": 31740,
+      "physical": 29820,
       "preventa": 0,
       "distriC": 960,
       "distriInterior": 0,
@@ -1176,7 +1186,7 @@
       "administrative": 0
     },
     "5670": {
-      "physical": 182637,
+      "physical": 182265,
       "preventa": 0,
       "distriC": 5040,
       "distriInterior": 0,
@@ -1196,7 +1206,7 @@
       "administrative": 0
     },
     "5680": {
-      "physical": 63463,
+      "physical": 63457,
       "preventa": 0,
       "distriC": 360,
       "distriInterior": 0,
@@ -1246,7 +1256,7 @@
       "administrative": 0
     },
     "8687": {
-      "physical": 437,
+      "physical": 1262,
       "preventa": 0,
       "distriC": 0,
       "distriInterior": 0,
