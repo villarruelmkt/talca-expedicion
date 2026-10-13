@@ -112,6 +112,7 @@ let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
 
 function save(){
  db.schemaVersion = V16_SCHEMA_VERSION;
+ if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
  (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
  

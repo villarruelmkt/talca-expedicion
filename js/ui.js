@@ -119,6 +119,70 @@ function v1Backup(label='Respaldo manual'){
   const raw=JSON.stringify(db);let arr=[];try{arr=JSON.parse(v1SafeGet('talcaExpBackups')||'[]')}catch(e){}
   arr.push({id:'bk_'+Date.now(),date:new Date().toISOString(),label,data:raw});if(arr.length>10)arr=arr.slice(-10);v1SafeSet('talcaExpBackups',JSON.stringify(arr));return arr.at(-1)
 }
+const OPERATIONAL_PENDING_TYPES = ['preventa', 'distriC', 'distriInterior', 'oesteMendoza', 'oesteJeremias'];
+
+function v1CalculateActiveOrderPendings() {
+  let map = {};
+  (db.orders || []).forEach(o => {
+    if (!o || o._deleted || o.pendingType === 'cancelled' || o.status === 'Anulada') return;
+    let type = o.pendingType;
+    if (!type || !OPERATIONAL_PENDING_TYPES.includes(type)) return;
+    
+    // Si la orden ya está finalizada o no tiene pendientes, se omite
+    if (typeof v11OrderStatus === 'function') {
+      let st = v11OrderStatus(o);
+      if (st === 'Despachada' || st === 'Anulada') return;
+    } else if (o.status === 'Despachada' || o.status === 'Completa' || o.status === 'Anulada') {
+      return;
+    }
+    
+    if (typeof v11OrderOutstanding === 'function') {
+      if (v11OrderOutstanding(o) <= 0) return;
+    }
+    
+    if (Array.isArray(o.requestLines) && o.requestLines.length > 0) {
+      o.requestLines.forEach(l => {
+        let pid = l.productId;
+        if (!pid) return;
+        let pending = typeof v11LineOutstanding === 'function'
+          ? v11LineOutstanding(l)
+          : Math.max(0, Number(l.total || 0) - Number(l.resolvedTotal || 0));
+        if (pending > 0) {
+          if (!map[pid]) map[pid] = { preventa: 0, distriC: 0, distriInterior: 0, oesteMendoza: 0, oesteJeremias: 0, orders: [] };
+          map[pid][type] = (map[pid][type] || 0) + pending;
+          map[pid].orders.push({ orderNumber: o.number, orderId: o.id, fleteroId: o.fleteroId, type, pending });
+        }
+      });
+    } else if (Array.isArray(o.deliveries) && o.deliveries.length > 0) {
+      let lastDelivery = o.deliveries[o.deliveries.length - 1];
+      (lastDelivery.lines || []).forEach(l => {
+        let pid = l.productId;
+        let pending = Number(l.pendingTotal || 0);
+        if (pid && pending > 0) {
+          if (!map[pid]) map[pid] = { preventa: 0, distriC: 0, distriInterior: 0, oesteMendoza: 0, oesteJeremias: 0, orders: [] };
+          map[pid][type] = (map[pid][type] || 0) + pending;
+          map[pid].orders.push({ orderNumber: o.number, orderId: o.id, fleteroId: o.fleteroId, type, pending });
+        }
+      });
+    }
+  });
+  return map;
+}
+
+function v1SyncOrderBuckets() {
+  db.stockBuckets = db.stockBuckets || {};
+  let orderPendings = v1CalculateActiveOrderPendings();
+  (db.products || []).forEach(p => {
+    let pid = p.id;
+    let b = v1EnsureBucket(pid);
+    OPERATIONAL_PENDING_TYPES.forEach(t => {
+      b[t] = orderPendings[pid]?.[t] || 0;
+    });
+  });
+}
+window.v1CalculateActiveOrderPendings = v1CalculateActiveOrderPendings;
+window.v1SyncOrderBuckets = v1SyncOrderBuckets;
+
 function v1EnsureBucket(pid){
   db.stockBuckets=db.stockBuckets||{};
   db.stockBuckets[pid]=Object.assign({physical:db.stock[pid]||0,preventa:0,distriC:0,distriInterior:0,sinCodificar:0,oesteMendoza:0,oesteJeremias:0},db.stockBuckets[pid]||{});
@@ -1084,17 +1148,42 @@ v1State=function(bucket){
 };
 
 openPendingEditorV1=function(pid){
+  v1SyncOrderBuckets();
   let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid);
-  modal(`<div class="headrow"><div><h2>Pendientes · ${v14Text(p.name)}</h2><div class="muted">“Sin codificar” se alimenta únicamente desde el ingreso de producción.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
+  let activeInfo=v1CalculateActiveOrderPendings();
+  let prodInfo=activeInfo[pid];
+  let ordersListHtml='';
+  if(prodInfo&&prodInfo.orders&&prodInfo.orders.length){
+    let items=prodInfo.orders.map(o=>{
+      let fl=db.fleteros.find(f=>f.id===o.fleteroId);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);">
+        <div>
+          <b>Orden N.° ${v14Text(o.orderNumber)}</b> · <span class="status partial">${v14Text(V11_PENDING_LABELS[o.type]||o.type)}</span>
+          <br><span class="muted">${v14Text(v13CarrierDisplay(fl))}</span>
+        </div>
+        <div style="text-align:right">
+          <b>${equivalent(o.pending,p)}</b>
+          <br><button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;margin-top:4px;" onclick="closeModal();viewOrder('${o.orderId}')">Ver orden</button>
+        </div>
+      </div>`;
+    }).join('');
+    ordersListHtml=`<div class="card" style="margin-top:14px;background:var(--soft);padding:12px;"><b style="font-size:13px">Órdenes activas vinculadas a este producto (${prodInfo.orders.length}):</b><div style="margin-top:6px;">${items}</div></div>`;
+  }else{
+    ordersListHtml=`<div class="card" style="margin-top:14px;background:var(--soft);padding:12px;text-align:center;"><span class="muted">No hay órdenes activas de expedición pendientes para este producto.</span></div>`;
+  }
+
+  modal(`<div class="headrow"><div><h2>Detalle de pendientes · ${v14Text(p.name)}</h2><div class="muted">Calculados automáticamente en tiempo real desde las órdenes activas.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
   <div class="formgrid">
-    ${v1PendingField('Preventa pendiente','preventa',b.preventa,p)}
-    ${v1PendingField('Distri C pendiente','distriC',b.distriC,p)}
-    ${v1PendingField('Distri Interior','distriInterior',b.distriInterior,p)}
-    ${v1PendingField('Oeste Mendoza pendiente','oesteMendoza',b.oesteMendoza,p)}
-    ${v1PendingField('Oeste Jeremías pendiente','oesteJeremias',b.oesteJeremias,p)}
+    <div><label>Preventa pendiente</label><input class="field" value="${equivalent(b.preventa,p)}" disabled style="background:var(--soft);font-weight:bold;"></div>
+    <div><label>Distri C pendiente</label><input class="field" value="${equivalent(b.distriC,p)}" disabled style="background:var(--soft);font-weight:bold;"></div>
+    <div><label>Distri Interior</label><input class="field" value="${equivalent(b.distriInterior,p)}" disabled style="background:var(--soft);font-weight:bold;"></div>
+    <div><label>Oeste Mendoza</label><input class="field" value="${equivalent(b.oesteMendoza,p)}" disabled style="background:var(--soft);font-weight:bold;"></div>
+    <div><label>Oeste Jeremías</label><input class="field" value="${equivalent(b.oesteJeremias,p)}" disabled style="background:var(--soft);font-weight:bold;"></div>
+    <div><label>Sin codificar (bloqueado)</label><input class="field" value="${equivalent(b.sinCodificar,p)}" disabled style="background:var(--soft);font-weight:bold;"></div>
   </div>
-  <label>Justificación / referencia</label><textarea id="v1PendingNote"></textarea>
-  <div class="right"><button class="btn btn-primary" onclick="savePendingV14('${pid}')">Guardar pendientes</button></div>`);
+  ${ordersListHtml}
+  <div class="muted" style="margin-top:12px;font-size:12px;">ℹ️ Los pendientes de Preventa y Distribución se generan y descuentan automáticamente desde las órdenes de carga. “Sin codificar” se alimenta desde Producción.</div>
+  <div class="right" style="margin-top:16px"><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>`);
 };
 function savePendingV14(pid){
   let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid),before=clone(b);
@@ -1109,6 +1198,7 @@ function v15AddFardos(totals, key, total, p) {
 }
 window.renderStockV1 = function renderStockV1(){
   if(!document.getElementById('stockBody'))return;
+  v1SyncOrderBuckets();
   let q=v14SearchNorm(document.getElementById('stockSearchV1')?.value||''),filter=document.getElementById('stockStateV1')?.value||'';
   let list=(db.products||[]).filter(p=>p.active!==false).filter(p=>{
     let hay=v14SearchNorm(`${p.id} ${p.alias||''} ${p.name}`);
@@ -1127,7 +1217,7 @@ window.renderStockV1 = function renderStockV1(){
       <td>${equivalent(b.preventa,p)}</td><td>${equivalent(b.distriC,p)}</td><td>${equivalent(b.distriInterior,p)}</td>
       <td>${equivalent(b.sinCodificar,p)}</td><td>${equivalent(b.oesteMendoza,p)}</td><td>${equivalent(b.oesteJeremias,p)}</td>
       <td><b>${equivalent(total,p)}</b></td><td>${percentage}</td>
-      <td class="no-print"><button class="btn btn-secondary" onclick="openPendingEditorV1('${p.id}')">Editar pendientes</button></td>
+      <td class="no-print"><button class="btn btn-secondary" onclick="openPendingEditorV1('${p.id}')">Ver pendientes</button></td>
     </tr>`;
   }).join('');
   let globalPct=totals.pending===0?null:(totals.physical===0?0:((totals.physical-totals.pending)*100)/totals.physical);
@@ -1135,6 +1225,7 @@ window.renderStockV1 = function renderStockV1(){
   stockBody.innerHTML=rows+totalRow;
 };
 exportStockV1CSV=function(){
+  v1SyncOrderBuckets();
   let rows=[['Código','Alias','Producto','Stock físico','Stock entregable','Preventa','Distri C','Distri Interior','Sin codificar','Oeste Mendoza','Oeste Jeremías','Total pendiente','% disponible']];
   (db.products||[]).filter(p=>p.active!==false).forEach(p=>{
     let b=v1EnsureBucket(p.id),total=v1PendingTotal(b),pct=v1Pct(b);
