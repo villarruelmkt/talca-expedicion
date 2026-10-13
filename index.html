@@ -120,10 +120,10 @@ window.addEventListener('unhandledrejection', function(event) {
 </section>
 
 <section id="orders" class="page hidden">
-  <div class="headrow"><div><h1>Órdenes de carga</h1><div class="muted">Una orden puede tener varias entregas, pendientes y cambios.</div></div><button class="btn btn-primary" onclick="openOrderForm()">Nueva orden</button></div>
+  <div class="headrow"><div><h1>Órdenes de carga</h1><div class="muted">Una orden puede tener varias entregas, pendientes y cambios.</div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button id="btnPrintCombinedOrders" class="btn btn-secondary hidden" onclick="printCombinedOrders()">🖨️ Imprimir combinadas (<span id="combinedOrderCount">0</span>)</button><button class="btn btn-primary" onclick="openOrderForm()">Nueva orden</button></div></div>
   <div class="card no-print"><div class="filterbar"><div><label>Fletero</label><select id="ofCarrier" onchange="renderOrders()"><option value="">Todos</option></select></div><div><label>Día</label><input id="ofDate" class="field" type="date" onchange="renderOrders()"></div><div><label>Encargado</label><select id="ofUser" onchange="renderOrders()"><option value="">Todos</option></select></div><div><label>Turno</label><select id="ofShift" onchange="renderOrders()"><option value="">Todos</option><option>Mañana</option><option>Tarde</option></select></div><div style="align-self:end"><button class="btn btn-secondary" onclick="clearOrderFilters()">Limpiar</button> <button class="btn btn-primary" onclick="printSection('orders','Reporte de órdenes')">Imprimir</button></div></div></div>
   <h2 class="report-title">Reporte de órdenes</h2>
-  <div class="card tablewrap"><table><thead><tr><th>Orden</th><th>Fecha</th><th>Fletero</th><th>Tipo</th><th>Encargado</th><th>Turno</th><th>Estado</th><th>Solicitado</th><th>Entregado</th><th class="no-print"></th></tr></thead><tbody id="ordersBody"></tbody></table></div>
+  <div class="card tablewrap"><table><thead><tr><th style="width:36px;text-align:center;" class="no-print">Sel.</th><th>Orden</th><th>Fecha</th><th>Fletero</th><th>Tipo</th><th>Encargado</th><th>Turno</th><th>Estado</th><th>Solicitado</th><th>Entregado</th><th class="no-print"></th></tr></thead><tbody id="ordersBody"></tbody></table></div>
 </section>
 
 
@@ -227,7 +227,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 
 
-<script src="app.min.js?v=19" charset="utf-8"></script>
+<script src="app.min.js?v=20" charset="utf-8"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
