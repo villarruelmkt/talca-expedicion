@@ -119,14 +119,15 @@ function v1Backup(label='Respaldo manual'){
   const raw=JSON.stringify(db);let arr=[];try{arr=JSON.parse(v1SafeGet('talcaExpBackups')||'[]')}catch(e){}
   arr.push({id:'bk_'+Date.now(),date:new Date().toISOString(),label,data:raw});if(arr.length>10)arr=arr.slice(-10);v1SafeSet('talcaExpBackups',JSON.stringify(arr));return arr.at(-1)
 }
-const OPERATIONAL_PENDING_TYPES = ['preventa', 'distriC', 'distriInterior', 'oesteMendoza', 'oesteJeremias'];
+var OPERATIONAL_PENDING_TYPES = ['preventa', 'distriC', 'distriInterior', 'oesteMendoza', 'oesteJeremias'];
 
 function v1CalculateActiveOrderPendings() {
   let map = {};
+  let validPendingTypes = (typeof OPERATIONAL_PENDING_TYPES !== 'undefined' && OPERATIONAL_PENDING_TYPES) ? OPERATIONAL_PENDING_TYPES : ['preventa', 'distriC', 'distriInterior', 'oesteMendoza', 'oesteJeremias'];
   (db.orders || []).forEach(o => {
     if (!o || o._deleted || o.pendingType === 'cancelled' || o.status === 'Anulada') return;
     let type = o.pendingType;
-    if (!type || !OPERATIONAL_PENDING_TYPES.includes(type)) return;
+    if (!type || !validPendingTypes.includes(type)) return;
     
     // Si la orden ya está finalizada o no tiene pendientes, se omite
     if (typeof v11OrderStatus === 'function') {
@@ -172,10 +173,11 @@ function v1CalculateActiveOrderPendings() {
 function v1SyncOrderBuckets() {
   db.stockBuckets = db.stockBuckets || {};
   let orderPendings = v1CalculateActiveOrderPendings();
+  let validPendingTypes = (typeof OPERATIONAL_PENDING_TYPES !== 'undefined' && OPERATIONAL_PENDING_TYPES) ? OPERATIONAL_PENDING_TYPES : ['preventa', 'distriC', 'distriInterior', 'oesteMendoza', 'oesteJeremias'];
   (db.products || []).forEach(p => {
     let pid = p.id;
     let b = v1EnsureBucket(pid);
-    OPERATIONAL_PENDING_TYPES.forEach(t => {
+    validPendingTypes.forEach(t => {
       b[t] = orderPendings[pid]?.[t] || 0;
     });
   });

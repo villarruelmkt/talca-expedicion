@@ -20,7 +20,6 @@ function applyVerifiedStockV22() {
     if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
   });
   db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
-  if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
   safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
   safeSet(localStorage, 'talca_stock_verified_v22', '1');
 }
@@ -148,7 +147,9 @@ let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
 
 function save(){
  db.schemaVersion = V16_SCHEMA_VERSION;
- if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
+ if (typeof v1SyncOrderBuckets === 'function') {
+   try { v1SyncOrderBuckets(); } catch(e) { console.warn('v1SyncOrderBuckets diferido:', e); }
+ }
  (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
  
