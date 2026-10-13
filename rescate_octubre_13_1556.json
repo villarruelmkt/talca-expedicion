@@ -1,0 +1,1269 @@
+{
+  "schemaVersion": 7,
+  "counters": {
+    "CE": 16,
+    "AE": 37
+  },
+  "users": [
+    {
+      "id": "u1",
+      "username": "RAraoz",
+      "displayName": "Raul Araoz",
+      "password": "0425",
+      "active": true
+    },
+    {
+      "id": "u2",
+      "username": "AGuaymas",
+      "displayName": "Andres Guaymas",
+      "password": "235456",
+      "active": true
+    },
+    {
+      "id": "u3",
+      "username": "PVillarruel",
+      "displayName": "Pablo Villarruel",
+      "password": "14072015",
+      "active": true
+    },
+    {
+      "id": "umtrt3foganlf",
+      "username": "MJimenez",
+      "displayName": "Monica Jimenez",
+      "password": "092026",
+      "active": true
+    },
+    {
+      "id": "umuzkgytmzc66",
+      "username": "@mendoza",
+      "displayName": "Mendoza",
+      "password": "1234",
+      "active": true
+    }
+  ],
+  "products": [
+    {
+      "id": "5670",
+      "name": "Talca Cola 3 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "CO3",
+      "active": true,
+      "employeeBenefit": true
+    },
+    {
+      "id": "5675",
+      "name": "Talca Lima Limón 3 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "LI3",
+      "active": true,
+      "employeeBenefit": true
+    },
+    {
+      "id": "5680",
+      "name": "Talca Manzana 3 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "MA3",
+      "active": true,
+      "employeeBenefit": true
+    },
+    {
+      "id": "5685",
+      "name": "Talca Naranja 3 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "NA3",
+      "active": true,
+      "employeeBenefit": true
+    },
+    {
+      "id": "5690",
+      "name": "Talca Pomelo 3 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "PO3",
+      "active": true,
+      "employeeBenefit": true
+    },
+    {
+      "id": "5051",
+      "name": "Talca Cola 500 ml",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "CO5",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5056",
+      "name": "Talca Lima Limón 500 ml",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "LI5",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5061",
+      "name": "Talca Manzana 500 ml",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "MA5",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5066",
+      "name": "Talca Naranja 500 ml",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "NA5",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5071",
+      "name": "Talca Pomelo 500 ml",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "PO5",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "8670",
+      "name": "Agua 2 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "AG2",
+      "active": true,
+      "employeeBenefit": true
+    },
+    {
+      "id": "4900",
+      "name": "Soda 2,25 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "SO2",
+      "active": true,
+      "employeeBenefit": true
+    },
+    {
+      "id": "4171",
+      "name": "Soda 500 ml",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "",
+      "active": false,
+      "employeeBenefit": false
+    },
+    {
+      "id": "4910",
+      "name": "Soda sifón 2 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "SIF",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "BIDON",
+      "name": "Bidón de agua",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "",
+      "active": false,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5200",
+      "name": "Talca Cola 2.25 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "CO2",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5205",
+      "name": "Talca Lima Limón 2.25 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "LI2",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5210",
+      "name": "Talca Manzana 2.25 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "MA2",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5215",
+      "name": "Talca Naranja 2.25 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "NA2",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "5220",
+      "name": "Talca Pomelo 2.25 L",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "PO2",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "8687",
+      "name": "Bidón de agua",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "BID",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "8680",
+      "name": "Agua 600 cc",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "AG6",
+      "active": true,
+      "employeeBenefit": false
+    },
+    {
+      "id": "417",
+      "name": "Soda 500 ml",
+      "pack": 6,
+      "perCut": 15,
+      "cuts": 4,
+      "alias": "SO5",
+      "active": true,
+      "employeeBenefit": false
+    }
+  ],
+  "fleteros": [
+    {
+      "id": "f1",
+      "name": "SANCHEZ GASTON",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "f2",
+      "name": "JEREMIAS",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmths7916y1ip",
+      "name": "RAICES VALLISTAS",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmths7z5au9z1",
+      "name": "RUMAGÑOLI",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmths8ngoart9",
+      "name": "GAVIOTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtht2a3ff7of",
+      "name": "ZONA NORTE",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtht2hl5fi8c",
+      "name": "GOROSITO PREVENTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtht2qrfuvqa",
+      "name": "GUERRA PREVENTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtht2ykdzyn0",
+      "name": "GERON PREVENTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtcp16rjwj",
+      "name": "CARREFOUR",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtffuodre6",
+      "name": "ATR MAYORISTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtflsinya5",
+      "name": "SOÑADORES",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtfs234fkc",
+      "name": "GERON 1",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtfzyhhmkn",
+      "name": "SEJOR",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtg8qf7jrb",
+      "name": "DEL ROSARIO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtgegnoymx",
+      "name": "CHAILE MATIAS",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtgzjkbgt2",
+      "name": "BURGOS GABRIELA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthth800vjg5",
+      "name": "MUNICIPALIDAD CHICOANA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmththt6fbf0y",
+      "name": "KAMAL",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmththyxxpyl9",
+      "name": "CASIMIRO RENE",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthti9qr3ggl",
+      "name": "ADOLFO 32",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtifnq0ndl",
+      "name": "MARIO 15",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtilyvqgmx",
+      "name": "IBAÑEZ",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtizg50wsl",
+      "name": "LOZANO DIRECTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtj5tkomvf",
+      "name": "MASSALIN",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtjf34sg7a",
+      "name": "CLUB CASTAÑARES",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtjjttwfds",
+      "name": "PADILLA MARCELO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtjqvo24yl",
+      "name": "GONZALEZ OSVALDO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtjuwwcs7i",
+      "name": "LEONCIA NERIZ",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtjzjgxmua",
+      "name": "SERVICIO PENITENCIARIO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtk4rpgjbk",
+      "name": "EL PEQUEÑIN",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtk9cb02jt",
+      "name": "ESQUIVEL EDUARDO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtkesv7431",
+      "name": "SARAPURA NORA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtlpbqd19t",
+      "name": "MAMANI JORGE RUBEN",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtlu3ioq8l",
+      "name": "FUENTES ALCOBA JOSE LUIS",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtm433bfvn",
+      "name": "JUJEÑITA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtm8s7c2sn",
+      "name": "FLORES JOSE LINO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtq5e2jmoj",
+      "name": "GOROSITO DIRECTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtqp8f3ruw",
+      "name": "HORACIO GUTIERREZ",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtw4p4xbed",
+      "name": "MITRE",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtx084dr41",
+      "name": "GUTIERREZ JUAN ALEJANDRO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthtzs84xpx7",
+      "name": "HUANG DELONG",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthu0hho0gyp",
+      "name": "CHAHLA MALUF IGNACIO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthu0p0urq5h",
+      "name": "CASIMIRO YAEL",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthuhriufzou",
+      "name": "DAMESCO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmthui8f03nvb",
+      "name": "MIGUELITO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtrroixu7y9w",
+      "name": "GERONIMO MAURO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtrsb4a0j7bf",
+      "name": "GONZALEZ HECTOR",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtrsd81wrc5m",
+      "name": "CHOQUE DIEGO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtrsvrh3q88v",
+      "name": "LIENDRO JUSTO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtrt2hb18ea4",
+      "name": "PAEZ ANGELA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmtrt7owmu9ol",
+      "name": "ATLAS",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmux1mq15pzlr",
+      "name": "GUITIAN MARIA LUZ",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmux1xuer4m6l",
+      "name": "CONSUMIDOR FINAL",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmux3mta67y2i",
+      "name": "LOZANO PREVENTA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuxyf8f5h0d7",
+      "name": "EQUIPO TALCA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuxyjfjm6898",
+      "name": "GUANCA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuy2uvwdfgpx",
+      "name": "NOCHERA",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuy7vd2incan",
+      "name": "RUBIES GABRIEL",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuyc2da2b8ag",
+      "name": "LUI AUGUSTO",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuyu9bewheg0",
+      "name": "APAZA ALEX",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuyxmcwgyn8r",
+      "name": "QUIJANO BASQUET",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmuyxnp2urq57",
+      "name": "LOPEZ ERIC",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmv0yn4u6nd21",
+      "name": "VILMA",
+      "surname": "YEVARA",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmv12knd7aiem",
+      "name": "MAXIMO",
+      "surname": "QUIPILDOR",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmv1cve9s7ar8",
+      "name": "HUGO PORTAL",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmv1p99n86k9o",
+      "name": "cruz raul",
+      "surname": "",
+      "company": "",
+      "active": true
+    },
+    {
+      "id": "fmv6snecfk063",
+      "name": "EL MILAGRO",
+      "surname": "",
+      "company": "",
+      "active": true
+    }
+  ],
+  "employees": [
+    {
+      "id": "e1",
+      "legajo": "11607",
+      "name": "JOSE",
+      "surname": "MARTINEZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "2026-07",
+      "lastConsumption": "2026-10-08T15:24:08.529Z"
+    },
+    {
+      "id": "emp_10054",
+      "legajo": "10054",
+      "name": "JOSE ANTONIO",
+      "surname": "LOPEZ MENA",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T15:24:08.529Z"
+    },
+    {
+      "id": "emp_10055",
+      "legajo": "10055",
+      "name": "FACUNDO",
+      "surname": "MOLINA",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T15:24:08.529Z"
+    },
+    {
+      "id": "emp_10101",
+      "legajo": "10101",
+      "name": "SERGIO OMAR",
+      "surname": "FERNANDEZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T15:24:08.529Z"
+    },
+    {
+      "id": "emp_10102",
+      "legajo": "10102",
+      "name": "CLAUDIA INES",
+      "surname": "LIZONDO",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T15:24:08.529Z"
+    },
+    {
+      "id": "emp_10103",
+      "legajo": "10103",
+      "name": "ADOLFO HEN",
+      "surname": "LI",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10112",
+      "legajo": "10112",
+      "name": "GONZALO",
+      "surname": "LOPEZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10113",
+      "legajo": "10113",
+      "name": "CLAUDIA",
+      "surname": "ALBORNOZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10117",
+      "legajo": "10117",
+      "name": "MONICA LILIANA",
+      "surname": "JIMENEZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10118",
+      "legajo": "10118",
+      "name": "MARCO ANTONIO",
+      "surname": "CORTEZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10419",
+      "legajo": "10419",
+      "name": "JORGE RAUL",
+      "surname": "ARAOZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10426",
+      "legajo": "10426",
+      "name": "HUGO LUIS",
+      "surname": "PORTAL",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10430",
+      "legajo": "10430",
+      "name": "CARLOS",
+      "surname": "FLORES",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10432",
+      "legajo": "10432",
+      "name": "SERGIO",
+      "surname": "GOMEZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10437",
+      "legajo": "10437",
+      "name": "ALEJANDRO A",
+      "surname": "FERLATTI",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10439",
+      "legajo": "10439",
+      "name": "BARTOLOME",
+      "surname": "MORALES",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T19:01:45.319Z"
+    },
+    {
+      "id": "emp_10440",
+      "legajo": "10440",
+      "name": "ALDO GONZALO",
+      "surname": "PLAZA",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-13T15:24:09.302Z"
+    },
+    {
+      "id": "emp_10441",
+      "legajo": "10441",
+      "name": "DIEGO",
+      "surname": "LIENDRO",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-13T15:24:09.302Z"
+    },
+    {
+      "id": "emp_10442",
+      "legajo": "10442",
+      "name": "EDGAR",
+      "surname": "QUARTIN",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-13T15:24:09.302Z"
+    },
+    {
+      "id": "emp_10711",
+      "legajo": "10711",
+      "name": "ANDRES RICARDO",
+      "surname": "GUAYMAS",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-13T15:24:09.302Z"
+    },
+    {
+      "id": "emp_10725",
+      "legajo": "10725",
+      "name": "CARLOS S",
+      "surname": "BARBOZA E",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-13T15:24:09.302Z"
+    },
+    {
+      "id": "emp_10754",
+      "legajo": "10754",
+      "name": "MARIA VICTORIA",
+      "surname": "LUI VEGAS",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-13T15:24:09.302Z"
+    },
+    {
+      "id": "emp_10902",
+      "legajo": "10902",
+      "name": "JOSE LUIS",
+      "surname": "JUAREZ",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-13T15:24:09.302Z"
+    },
+    {
+      "id": "emp_10903",
+      "legajo": "10903",
+      "name": "MARCOS",
+      "surname": "BORDON",
+      "active": true,
+      "balance": 0,
+      "lastCredit": "",
+      "lastConsumption": "2026-10-08T14:24:48.379Z"
+    },
+    {
+      "id": "emp_10906",
+      "legajo": "10906",
+      "name": "JOAQUIN",
+      "surname": "CONDE",
+      "active": true,
+      "balance": 0,
+      "lastCredit": ""
+    },
+    {
+      "id": "emp_10907",
+      "legajo": "10907",
+      "name": "EXEQUIEL",
+      "surname": "BARCELO",
+      "active": true,
+      "balance": 0,
+      "lastCredit": ""
+    },
+    {
+      "id": "emp_10908",
+      "legajo": "10908",
+      "name": "HERNAN",
+      "surname": "",
+      "active": true,
+      "balance": 0,
+      "lastCredit": ""
+    }
+  ],
+  "stock": {
+    "417": 10019,
+    "4900": 79688,
+    "4910": 31740,
+    "5051": 19626,
+    "5056": 12969,
+    "5061": 26419,
+    "5066": 13184,
+    "5071": 11482,
+    "5200": 3614,
+    "5205": 3396,
+    "5210": 0,
+    "5215": 2046,
+    "5220": 1902,
+    "5670": 182637,
+    "5675": 54264,
+    "5680": 63463,
+    "5685": 46402,
+    "5690": 43657,
+    "8670": 21380,
+    "8680": 66954,
+    "8687": 437,
+    "BIDON": 0
+  },
+  "stockBuckets": {
+    "417": {
+      "physical": 10019,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "4900": {
+      "physical": 79688,
+      "preventa": 0,
+      "distriC": 960,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "4910": {
+      "physical": 31740,
+      "preventa": 0,
+      "distriC": 960,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5051": {
+      "physical": 19626,
+      "preventa": 0,
+      "distriC": 840,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5056": {
+      "physical": 12969,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5061": {
+      "physical": 26419,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5066": {
+      "physical": 13184,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5071": {
+      "physical": 11482,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5200": {
+      "physical": 3614,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5205": {
+      "physical": 3396,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5210": {
+      "physical": 0,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5215": {
+      "physical": 2046,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5220": {
+      "physical": 1902,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5670": {
+      "physical": 182637,
+      "preventa": 0,
+      "distriC": 5040,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5675": {
+      "physical": 54264,
+      "preventa": 0,
+      "distriC": 720,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5680": {
+      "physical": 63463,
+      "preventa": 0,
+      "distriC": 360,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5685": {
+      "physical": 46402,
+      "preventa": 0,
+      "distriC": 360,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "5690": {
+      "physical": 43657,
+      "preventa": 0,
+      "distriC": 360,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "8670": {
+      "physical": 21380,
+      "preventa": 0,
+      "distriC": 480,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "8680": {
+      "physical": 66954,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "8687": {
+      "physical": 437,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    },
+    "BIDON": {
+      "physical": 0,
+      "preventa": 0,
+      "distriC": 0,
+      "distriInterior": 0,
+      "sinCodificar": 0,
+      "oesteMendoza": 0,
+      "oesteJeremias": 0,
+      "administrative": 0
+    }
+  }
+}

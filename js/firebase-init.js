@@ -63,13 +63,22 @@ function safeJSON(value,fallback=null){
  try{return value?JSON.parse(value):fallback}catch(err){return fallback}
 }
 function load(){
- let x=safeGet(localStorage,'talcaExpV02')||safeGet(localStorage,'talcaExpV01');
+ // Blindaje: Purgar proactivamente memoria residual arcaica de agosto 2026
+ safeRemove(localStorage,'talcaExpV01');
+ 
+ let x=safeGet(localStorage,'talcaExpV02');
+ // Fallback de emergencia local si talcaExpV02 no existe: intentar respaldo de seguridad reciente
+ if(!x) {
+   let bkp=safeGet(localStorage,'talcaExp_last_valid_backup');
+   if(bkp) x = bkp;
+ }
+ 
  let data=safeJSON(x,null)||{users:[],products:PRODUCT_SEED,fleteros:[],employees:[],stock:{},orders:[],movements:[],materialMoves:[],counts:[],audit:[],counters:{CE:0,AE:0}};
  data.users = (data.users && data.users.length) ? data.users : clone(DEMO.users);
  data.counters=data.counters||{CE:0,AE:0};
  data.audit=data.audit||[];
  data.products=data.products||PRODUCT_SEED;
- data.fleteros = (data.fleteros && data.fleteros.length) ? data.fleteros : clone(DEMO.fleteros);
+ data.fleteros = data.fleteros || [];
  data.employees = (data.employees && data.employees.length) ? data.employees : clone(DEMO.employees);
  data.stock=data.stock||{};
  data.orders=data.orders||[];

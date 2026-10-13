@@ -1,22 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Subir Backup a Firebase</title>
+  <title>Restaurar Backup a Firebase - Talca Expedición</title>
   <style>
-    body { font-family: sans-serif; padding: 40px; text-align: center; background: #f3f5f9; }
-    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
-    button { background: #19417f; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; margin-top: 20px; }
-    #status { margin-top: 20px; font-weight: bold; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px 20px; background: #f3f5f9; color: #1e293b; }
+    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); max-width: 600px; margin: 0 auto; text-align: left; }
+    h2 { margin-top: 0; color: #0f172a; text-align: center; }
+    .subtitle { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px; }
+    .input-box { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 25px; text-align: center; background: #f8fafc; cursor: pointer; margin-bottom: 20px; }
+    .input-box:hover { border-color: #3b82f6; }
+    input[type="file"] { margin: 0 auto; }
+    .audit-box { background: #f1f5f9; border-radius: 8px; padding: 15px; margin-top: 15px; font-size: 14px; }
+    .audit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .stat-item { background: white; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .stat-val { font-size: 18px; font-weight: bold; color: #1e3a8a; }
+    .stat-label { font-size: 12px; color: #64748b; }
+    .warning-box { background: #fef2f2; border: 1px solid #f87171; color: #991b1b; padding: 12px; border-radius: 6px; margin-top: 15px; font-size: 13px; line-height: 1.4; }
+    .success-box { background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 12px; border-radius: 6px; margin-top: 15px; font-size: 13px; }
+    .btn { background: #19417f; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; width: 100%; margin-top: 20px; transition: background 0.2s; }
+    .btn:hover { background: #143364; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    #status { margin-top: 15px; font-weight: bold; text-align: center; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>Restaurar Backup a la Nube</h2>
-    <p>Selecciona tu archivo JSON de backup para subirlo a Firebase.</p>
-    <input type="file" id="fileInput" accept=".json">
-    <br>
-    <button id="uploadBtn">Subir a la nube</button>
+    <h2>Restaurar Backup a Firebase</h2>
+    <div class="subtitle">Herramienta protegida contra sobreescrituras accidentales</div>
+    
+    <div class="input-box">
+      <p style="margin: 0 0 10px 0; font-weight: 500;">Selecciona el archivo JSON de respaldo:</p>
+      <input type="file" id="fileInput" accept=".json">
+    </div>
+
+    <div id="auditContainer" style="display:none;">
+      <div class="audit-box">
+        <b>Análisis del archivo seleccionado:</b>
+        <div class="audit-grid">
+          <div class="stat-item"><div class="stat-val" id="statFleteros">0</div><div class="stat-label">Fleteros</div></div>
+          <div class="stat-item"><div class="stat-val" id="statStock">0</div><div class="stat-label">Productos con Stock</div></div>
+          <div class="stat-item"><div class="stat-val" id="statProducts">0</div><div class="stat-label">Productos configurados</div></div>
+          <div class="stat-item"><div class="stat-val" id="statUsers">0</div><div class="stat-label">Usuarios</div></div>
+        </div>
+        <div id="fleterosPreview" style="margin-top:10px; font-size:12px; color:#475569;"></div>
+      </div>
+      
+      <div id="warningArea"></div>
+
+      <button id="uploadBtn" class="btn">Subir a la nube con seguridad</button>
+    </div>
+
     <p id="status"></p>
   </div>
 
@@ -36,30 +70,86 @@
     const firestoreDb = firebase.firestore();
     const docRef = firestoreDb.collection("talca").doc("data");
 
-    document.getElementById('uploadBtn').addEventListener('click', () => {
-      const file = document.getElementById('fileInput').files[0];
-      if (!file) return alert('Por favor, selecciona un archivo JSON primero.');
-      
+    let parsedPayload = null;
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
       const reader = new FileReader();
-      reader.onload = async (e) => {
+      reader.onload = (event) => {
         try {
-          const raw = JSON.parse(e.target.result);
-          // Los backups generados tienen la BD real dentro de "data"
-          const dbPayload = raw.data ? raw.data : raw;
-          
-          document.getElementById('status').innerText = 'Subiendo a la nube, por favor espera...';
-          document.getElementById('status').style.color = '#d2a23a';
-          
-          await docRef.set(dbPayload);
-          
-          document.getElementById('status').innerText = '¡Backup subido con éxito! Ya puedes abrir tu app en Vercel.';
-          document.getElementById('status').style.color = 'green';
+          const raw = JSON.parse(event.target.result);
+          parsedPayload = raw.data ? raw.data : raw;
+
+          const fleteros = parsedPayload.fleteros || [];
+          const products = parsedPayload.products || [];
+          const users = parsedPayload.users || [];
+          const stock = parsedPayload.stock || {};
+          const stockKeys = Object.keys(stock).filter(k => Number(stock[k]) > 0);
+
+          document.getElementById('statFleteros').innerText = fleteros.length;
+          document.getElementById('statStock').innerText = stockKeys.length;
+          document.getElementById('statProducts').innerText = products.length;
+          document.getElementById('statUsers').innerText = users.length;
+
+          // Preview de primeros fleteros
+          const names = fleteros.slice(0, 6).map(f => f.name).filter(Boolean).join(', ');
+          document.getElementById('fleterosPreview').innerText = names ? 'Ejemplos: ' + names + (fleteros.length > 6 ? '...' : '') : '';
+
+          // Evaluaciones de seguridad
+          const warnings = [];
+          if (fleteros.length < 10) {
+            warnings.push('⚠️ Este archivo tiene muy pocos fleteros (' + fleteros.length + '). Podría tratarse de un respaldo de prueba o antiguo que borre fleteros actuales.');
+          }
+          if (stockKeys.length === 0) {
+            warnings.push('⚠️ No se detectó stock positivo en ningún producto.');
+          }
+
+          const warnArea = document.getElementById('warningArea');
+          if (warnings.length > 0) {
+            warnArea.innerHTML = '<div class="warning-box"><b>Atención antes de continuar:</b><br>' + warnings.join('<br>') + '</div>';
+          } else {
+            warnArea.innerHTML = '<div class="success-box">✅ <b>Archivo saludable:</b> Contiene información completa de fleteros y stock.</div>';
+          }
+
+          document.getElementById('auditContainer').style.display = 'block';
+          document.getElementById('status').innerText = '';
         } catch(err) {
-          document.getElementById('status').innerText = 'Error: ' + err.message;
-          document.getElementById('status').style.color = 'red';
+          alert('Error al leer el archivo JSON: ' + err.message);
         }
       };
       reader.readAsText(file);
+    });
+
+    document.getElementById('uploadBtn').addEventListener('click', async () => {
+      if (!parsedPayload) return alert('Por favor selecciona un archivo primero.');
+
+      const fleterosCount = (parsedPayload.fleteros || []).length;
+      if (fleterosCount < 5) {
+        if (!confirm('PELIGRO: El archivo tiene menos de 5 fleteros. Si continúas, podrías sobreescribir la base de datos real. ¿Deseas forzar la subida de todos modos?')) {
+          return;
+        }
+      } else {
+        if (!confirm('¿Confirmas que deseas restaurar este respaldo con ' + fleterosCount + ' fleteros a Firebase?')) {
+          return;
+        }
+      }
+
+      const statusEl = document.getElementById('status');
+      statusEl.innerText = 'Subiendo a la nube de Firebase, por favor espera...';
+      statusEl.style.color = '#d2a23a';
+      document.getElementById('uploadBtn').disabled = true;
+
+      try {
+        await docRef.set(parsedPayload);
+        statusEl.innerText = '¡Respaldo subido con éxito a Firebase! Los cambios ya están en la nube.';
+        statusEl.style.color = 'green';
+      } catch(err) {
+        statusEl.innerText = 'Error al subir a Firebase: ' + err.message + ' (Revisa si la cuota 429 de Firebase está activa)';
+        statusEl.style.color = 'red';
+        document.getElementById('uploadBtn').disabled = false;
+      }
     });
   </script>
 </body>

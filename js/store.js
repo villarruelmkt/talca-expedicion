@@ -19,25 +19,51 @@ function mergeList(local, cloud) {
 docRef.onSnapshot((doc) => {
   if (doc.exists) {
     let cloudDb = doc.data();
-    // Stock y configuraciones toman el valor de la nube (última verdad)
-    db.stock = cloudDb.stock || db.stock;
-    db.stockBuckets = cloudDb.stockBuckets || db.stockBuckets;
-    db.products = mergeList(db.products, cloudDb.products);
-    db.fleteros = mergeList(db.fleteros, cloudDb.fleteros);
-    db.employees = mergeList(db.employees, cloudDb.employees);
-    db.users = mergeList(db.users, cloudDb.users);
-    db.counters = cloudDb.counters || db.counters;
+    // Blindaje: Solo actualizar campos si la nube tiene datos reales y no vacíos
+    if (cloudDb.stock && Object.keys(cloudDb.stock).length > 0) {
+      db.stock = cloudDb.stock;
+    }
+    if (cloudDb.stockBuckets && Object.keys(cloudDb.stockBuckets).length > 0) {
+      db.stockBuckets = cloudDb.stockBuckets;
+    }
+    if (cloudDb.products && cloudDb.products.length > 0) {
+      db.products = mergeList(db.products, cloudDb.products);
+    }
+    if (cloudDb.fleteros && cloudDb.fleteros.length > 0) {
+      db.fleteros = mergeList(db.fleteros, cloudDb.fleteros);
+    }
+    if (cloudDb.employees && cloudDb.employees.length > 0) {
+      db.employees = mergeList(db.employees, cloudDb.employees);
+    }
+    if (cloudDb.users && cloudDb.users.length > 0) {
+      db.users = mergeList(db.users, cloudDb.users);
+    }
+    if (cloudDb.counters) {
+      db.counters = cloudDb.counters;
+    }
     
-    safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+    // Respaldo de seguridad local rotativo cada vez que los datos son consistentes
+    if ((db.fleteros || []).length >= 10) {
+      safeSet(localStorage, 'talcaExp_last_valid_backup', JSON.stringify(db));
+    }
+    safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
   } else {
-    // Si no existe el documento maestro, lo creamos sin los arreglos pesados
-    let clone = { ...db };
-    delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
-    docRef.set(clone).catch(console.error);
+    // Blindaje crítico: NUNCA crear el documento maestro en la nube si los datos locales son demo o degradados
+    let fleterosCount = (db.fleteros || []).length;
+    let hasStock = Object.keys(db.stock || {}).length > 0;
+    if (fleterosCount >= 10 && hasStock) {
+      let clone = { ...db };
+      delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
+      docRef.set(clone).catch(console.error);
+    } else {
+      console.warn('Blindaje: Se bloqueó la creación de talca/data porque los datos locales son insuficientes (fleteros:', fleterosCount, ')');
+    }
   }
   isFirebaseReady = true;
   try { if(typeof fillLoginUsers === 'function') fillLoginUsers(); } catch(e){}
   try { if(typeof renderAll === 'function') renderAll(); } catch(e){}
+}, (err) => {
+  console.warn('Alerta Firestore: Error en listener talca/data (posible cuota excedida u offline):', err);
 });
 
 function setupCollectionListeners() {
@@ -71,37 +97,16 @@ function setupCollectionListeners() {
           safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
           try{renderAll()}catch(e){}
        }
+    }, err => {
+       console.warn(`Alerta Firestore: Error en listener de colección ${col}:`, err);
     });
   });
 }
 setupCollectionListeners();
 
-// Sincronización en background a los 5 segundos (Auto-Migración y Offline Resolver)
-setTimeout(() => {
-   if (isFirebaseReady) {
-      console.log('Iniciando verificación de colecciones en background...');
-      ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
-         let currentIds = new Set();
-         (db[col] || []).forEach(item => {
-            if (!item.id) return;
-            currentIds.add(item.id);
-            let hash = fastHash(item);
-            if (lastSyncedDb[col].get(item.id) !== hash) {
-               firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
-               lastSyncedDb[col].set(item.id, hash);
-            }
-         });
-         
-         for (let id of lastSyncedDb[col].keys()) {
-            if (!currentIds.has(id)) {
-               let dRef = firestoreDb.collection(col).doc(id);
-               dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
-               lastSyncedDb[col].delete(id);
-            }
-         }
-      });
-   }
-}, 5000);
+// Blindaje contra saturación de cuota:
+// Se eliminó la re-escritura masiva de colecciones a los 5 segundos que provocaba agotamiento de cuota diaria (Error 429).
+// La sincronización en tiempo real es manejada de forma eficiente por los listeners y save().
 
 let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
 
@@ -109,6 +114,11 @@ function save(){
  db.schemaVersion = V16_SCHEMA_VERSION;
  (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
  safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+ 
+ // Si los datos locales son ricos, renovar el respaldo de emergencia
+ if ((db.fleteros || []).length >= 10) {
+   safeSet(localStorage, 'talcaExp_last_valid_backup', JSON.stringify(db));
+ }
  
  if (isFirebaseReady) {
    // Diff & Sync: Solo subimos a colecciones los items modificados o nuevos
@@ -133,10 +143,18 @@ function save(){
       }
    });
 
-   // Documento maestro súper liviano (Libre de límite de 1MB)
-   let clone = { ...db };
-   delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
-   docRef.set(clone).catch(console.error);
+   // Blindaje crítico: NUNCA sobreescribir el documento maestro en la nube si los datos locales parecen incompletos
+   let fleterosCount = (db.fleteros || []).length;
+   let hasStock = Object.keys(db.stock || {}).length > 0;
+   if (fleterosCount >= 5 && hasStock) {
+     let clone = { ...db };
+     delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
+     docRef.set(clone).catch(err => {
+       console.warn('Error al guardar documento maestro en la nube:', err);
+     });
+   } else {
+     console.warn('Guardado en la nube bloqueado preventivamente: los datos locales son insuficientes para sobreescribir talca/data (fleteros:', fleterosCount, ')');
+   }
  }
  
  try{renderAll()}
