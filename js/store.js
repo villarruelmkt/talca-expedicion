@@ -1,11 +1,11 @@
 // --- MODULE: GLOBAL STATE & CORE UTILS ---
 let db=load();
 
-// --- DEFINICIONES DE STOCK REAL VERIFICADO AL 13 DE OCTUBRE (CIERRE 20:00) ---
+// --- DEFINICIONES DE STOCK REAL VERIFICADO AL 13 DE OCTUBRE (CIERRE 20:00 - AJUSTE ÓRDENES) ---
 const VERIFIED_STOCK_OCT13_2000 = {
-  "5670": 182265, "5675": 54264, "5680": 63457, "5685": 46402, "5690": 43657,
+  "5670": 179739, "5675": 53124, "5680": 62617, "5685": 46342, "5690": 42451,
   "5051": 19626,  "5056": 12969, "5061": 26419, "5066": 13184, "5071": 11482,
-  "8670": 21380,  "4900": 79688, "4171": 0,     "4910": 29820, "BIDON": 0,
+  "8670": 20414,  "4900": 79208, "4171": 0,     "4910": 26934, "BIDON": 0,
   "5200": 3614,   "5205": 3396,  "5210": 0,     "5215": 2046,  "5220": 1902,
   "8687": 1262,   "8680": 66954, "417": 10019
 };
@@ -14,16 +14,19 @@ const CORRECT_PRODUCT_PACKS = {
   "8680": 12, "417": 12, "4171": 12, "8687": 1, "BIDON": 1
 };
 
-function applyVerifiedStockV22() {
+function applyVerifiedStockV25() {
   if (!db) return;
   (db.products || []).forEach(p => {
     if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
   });
-  db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
-  safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
-  safeSet(localStorage, 'talca_stock_verified_v22', '1');
+  if (localStorage.getItem('talca_stock_verified_v25') !== '1') {
+    db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+    safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+    safeSet(localStorage, 'talca_stock_verified_v25', '1');
+    localStorage.removeItem('talca_stock_pushed_v25');
+  }
 }
-applyVerifiedStockV22();
+applyVerifiedStockV25();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
@@ -46,11 +49,11 @@ docRef.onSnapshot((doc) => {
     // Blindaje: Solo actualizar campos si la nube tiene datos reales y no vacíos
     if (cloudDb.stock && Object.keys(cloudDb.stock).length > 0) {
       // Blindaje: si la nube aún tiene stock antiguo previo a la reconstrucción, conservar el verificado y subirlo
-      if (cloudDb.stock['5670'] !== VERIFIED_STOCK_OCT13_2000['5670'] && !localStorage.getItem('talca_stock_pushed_v22')) {
+      if (cloudDb.stock['5670'] !== VERIFIED_STOCK_OCT13_2000['5670'] && !localStorage.getItem('talca_stock_pushed_v25')) {
         console.warn('Blindaje: Se retiene el stock verificado frente a snapshot antiguo de Firestore.');
         db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
         save();
-        localStorage.setItem('talca_stock_pushed_v22', '1');
+        localStorage.setItem('talca_stock_pushed_v25', '1');
       } else {
         db.stock = cloudDb.stock;
       }
