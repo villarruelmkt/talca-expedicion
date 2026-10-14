@@ -94,14 +94,14 @@ docRef.onSnapshot((doc) => {
         if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
       });
     }
-    if (cloudDb.fleteros && cloudDb.fleteros.length > 0) {
-      db.fleteros = mergeList(db.fleteros, cloudDb.fleteros);
+    if (cloudDb.fleteros && cloudDb.fleteros.length >= 10) {
+      db.fleteros = cloudDb.fleteros;
     }
-    if (cloudDb.employees && cloudDb.employees.length > 0) {
-      db.employees = mergeList(db.employees, cloudDb.employees);
+    if (cloudDb.employees && cloudDb.employees.length >= 5) {
+      db.employees = cloudDb.employees;
     }
     if (cloudDb.users && cloudDb.users.length > 0) {
-      db.users = mergeList(db.users, cloudDb.users);
+      db.users = cloudDb.users;
     }
     if (cloudDb.counters) {
       db.counters = cloudDb.counters;
