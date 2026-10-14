@@ -96,7 +96,8 @@ function renderAll(){
 
   try {
     let el = document.getElementById('fleterosList');
-    if(el) el.innerHTML=(db.fleteros||[]).map(f=>`
+    let sorted = (typeof sortFleteros === 'function') ? sortFleteros([...(db.fleteros||[])]) : (db.fleteros||[]);
+    if(el) el.innerHTML=sorted.map(f=>`
       <div style="padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
         <div>
           <b>${f.name} ${f.surname||''}</b> ${f.active===false?'<span style="color:#ef4444;font-size:12px;font-weight:bold;">(Inactivo)</span>':''}

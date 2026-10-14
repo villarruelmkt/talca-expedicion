@@ -62,6 +62,13 @@ function safeRemove(storage,key){
 function safeJSON(value,fallback=null){
  try{return value?JSON.parse(value):fallback}catch(err){return fallback}
 }
+function sortFleteros(list){
+ return (list||[]).sort((a,b)=>{
+   let na = `${a.name||''} ${a.surname||''}`.trim();
+   let nb = `${b.name||''} ${b.surname||''}`.trim();
+   return na.localeCompare(nb,'es',{sensitivity:'base'});
+ });
+}
 function load(){
  // Blindaje: Purgar proactivamente memoria residual arcaica de agosto 2026
  safeRemove(localStorage,'talcaExpV01');
@@ -79,6 +86,7 @@ function load(){
  data.audit=data.audit||[];
  data.products=data.products||PRODUCT_SEED;
  data.fleteros = data.fleteros || [];
+ sortFleteros(data.fleteros);
  data.employees = (data.employees && data.employees.length) ? data.employees : clone(DEMO.employees);
  data.stock=data.stock||{};
  data.orders=data.orders||[];

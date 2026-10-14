@@ -77,6 +77,7 @@ function addFletero(){
         let c = document.getElementById('i_c').value.trim();
         if(!n) return toast('El nombre es obligatorio', 'error');
         db.fleteros.push({id:uid('f'),name:n,surname:s,company:c,active:true});
+        sortFleteros(db.fleteros);
         audit('Alta','Fletero',n,c);
         save(); closeModal(); toast('Fletero agregado');
     };
@@ -113,6 +114,7 @@ function editFletero(id){
         if(!n) return toast('El nombre es obligatorio', 'error');
         f.name=n; f.surname=document.getElementById('i_s').value.trim(); f.company=document.getElementById('i_c').value.trim();
         f.active = document.getElementById('i_a').value === "1";
+        sortFleteros(db.fleteros);
         save(); closeModal(); toast('Fletero editado');
     };
     document.getElementById('btnDeleteFletero').onclick = () => {
@@ -178,7 +180,7 @@ function cleanDuplicateFleteros(){
                 m.fleteroId = oldToNewId.get(m.fleteroId);
             }
         });
-        db.fleteros = toKeep;
+        db.fleteros = sortFleteros(toKeep);
         audit('Depuración', 'Fleteros', `${duplicates} duplicados`, 'Fusión automática por nombre');
         save();
         toast(`Se eliminaron ${duplicates} fleteros duplicados exitosamente`);
