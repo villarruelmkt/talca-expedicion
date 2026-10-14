@@ -39,14 +39,37 @@ applyVerifiedStockV27();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 31;
+const APP_BUILD_VERSION = 32;
 let hasInitialCloudSync = false;
 let lastCloudUpdatedAt = null;
+
+let lastMasterHashes = {
+  fleteros: null,
+  stock: null,
+  stockBuckets: null,
+  employees: null,
+  products: null,
+  users: null,
+  counters: null
+};
 
 let lastSyncedDb = {
   orders: new Map(), movements: new Map(), audit: new Map(), materialMoves: new Map(), counts: new Map()
 };
-function fastHash(obj) { return JSON.stringify(obj); }
+function fastHash(obj) {
+  if (!obj) return '';
+  if (Array.isArray(obj)) return JSON.stringify(obj);
+  if (typeof obj === 'object') {
+    let sortedKeys = Object.keys(obj).sort();
+    let sortedObj = {};
+    for (let i = 0; i < sortedKeys.length; i++) {
+      let k = sortedKeys[i];
+      sortedObj[k] = obj[k];
+    }
+    return JSON.stringify(sortedObj);
+  }
+  return String(obj);
+}
 
 function mergeList(local, cloud) {
    if (!cloud || !cloud.length) return (local || []).filter(x => !OBSOLETE_PRODUCT_IDS.includes(x.id));
@@ -142,6 +165,15 @@ docRef.onSnapshot((doc) => {
       safeSet(localStorage, 'talcaExp_last_valid_backup', JSON.stringify(db));
     }
     safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+
+    // Inicializar hashes de referencia de la nube para el guardado granular
+    lastMasterHashes.fleteros = fastHash(db.fleteros);
+    lastMasterHashes.stock = fastHash(db.stock);
+    lastMasterHashes.stockBuckets = fastHash(db.stockBuckets);
+    lastMasterHashes.employees = fastHash(db.employees);
+    lastMasterHashes.products = fastHash(db.products);
+    lastMasterHashes.users = fastHash(db.users);
+    lastMasterHashes.counters = fastHash(db.counters);
   } else {
     // Blindaje crítico: NUNCA crear el documento maestro en la nube si los datos locales son demo o degradados
     let fleterosCount = (db.fleteros || []).length;
@@ -249,24 +281,61 @@ function save(){
      return;
    }
 
-   // Blindaje crítico: NUNCA sobreescribir el documento maestro en la nube si los datos locales parecen incompletos
-   let fleterosCount = (db.fleteros || []).length;
-   let hasStock = Object.keys(db.stock || {}).length > 0;
-   if (fleterosCount >= 10 && hasStock) {
-     let clone = { ...db };
-     delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
-     // REGLA 1: Estampado de versión, timestamp y autor
-     clone.updatedAt = new Date().toISOString();
-     clone.appVersion = APP_BUILD_VERSION;
-     clone.lastSavedBy = (session && session.user && (session.user.displayName || session.user.username || session.user.email)) || (typeof session?.user === 'string' ? session.user : 'Desconocido');
-     lastCloudUpdatedAt = clone.updatedAt;
+   // CAMINO A: Guardado granular y desacoplado mediante diffing de campos en talca/data
+    let updatePayload = {};
 
-     docRef.set(clone).catch(err => {
-       console.warn('Error al guardar documento maestro en la nube:', err);
-     });
-   } else {
-     console.warn('Guardado en la nube bloqueado preventivamente: los datos locales son insuficientes para sobreescribir talca/data (fleteros:', fleterosCount, ')');
-   }
+    let currentFleterosHash = fastHash(db.fleteros);
+    if (lastMasterHashes.fleteros !== null && currentFleterosHash !== lastMasterHashes.fleteros && (db.fleteros || []).length >= 10) {
+      updatePayload.fleteros = db.fleteros;
+      lastMasterHashes.fleteros = currentFleterosHash;
+    }
+
+    let currentStockHash = fastHash(db.stock);
+    let currentBucketsHash = fastHash(db.stockBuckets);
+    if (lastMasterHashes.stock !== null && (currentStockHash !== lastMasterHashes.stock || currentBucketsHash !== lastMasterHashes.stockBuckets)) {
+      if (db.stock && Object.keys(db.stock).length > 0) {
+        updatePayload.stock = db.stock;
+        updatePayload.stockBuckets = db.stockBuckets;
+        lastMasterHashes.stock = currentStockHash;
+        lastMasterHashes.stockBuckets = currentBucketsHash;
+      }
+    }
+
+    let currentEmployeesHash = fastHash(db.employees);
+    if (lastMasterHashes.employees !== null && currentEmployeesHash !== lastMasterHashes.employees && (db.employees || []).length >= 5) {
+      updatePayload.employees = db.employees;
+      lastMasterHashes.employees = currentEmployeesHash;
+    }
+
+    let currentProductsHash = fastHash(db.products);
+    if (lastMasterHashes.products !== null && currentProductsHash !== lastMasterHashes.products && (db.products || []).length > 0) {
+      updatePayload.products = db.products;
+      lastMasterHashes.products = currentProductsHash;
+    }
+
+    let currentUsersHash = fastHash(db.users);
+    if (lastMasterHashes.users !== null && currentUsersHash !== lastMasterHashes.users && (db.users || []).length > 0) {
+      updatePayload.users = db.users;
+      lastMasterHashes.users = currentUsersHash;
+    }
+
+    let currentCountersHash = fastHash(db.counters);
+    if (lastMasterHashes.counters !== null && currentCountersHash !== lastMasterHashes.counters && db.counters) {
+      updatePayload.counters = db.counters;
+      lastMasterHashes.counters = currentCountersHash;
+    }
+
+    // Solo escribir a Firestore si realmente cambió algún campo maestro
+    if (Object.keys(updatePayload).length > 0) {
+      updatePayload.updatedAt = new Date().toISOString();
+      updatePayload.appVersion = APP_BUILD_VERSION;
+      updatePayload.lastSavedBy = (session && session.user && (session.user.displayName || session.user.username || session.user.email)) || (typeof session?.user === 'string' ? session.user : 'Desconocido');
+      lastCloudUpdatedAt = updatePayload.updatedAt;
+
+      docRef.set(updatePayload, { merge: true }).catch(err => {
+        console.warn('Error al actualizar campos parciales en talca/data:', err);
+      });
+    }
  }
  
  try{renderAll()}
@@ -431,3 +500,16 @@ setTimeout(() => {
     }
   }
 }, 3500);
+
+window.saveFleteros = function() {
+  if (typeof lastMasterHashes !== 'undefined') lastMasterHashes.fleteros = '';
+  save();
+};
+window.saveStock = function() {
+  if (typeof lastMasterHashes !== 'undefined') lastMasterHashes.stock = '';
+  save();
+};
+window.saveEmployees = function() {
+  if (typeof lastMasterHashes !== 'undefined') lastMasterHashes.employees = '';
+  save();
+};
