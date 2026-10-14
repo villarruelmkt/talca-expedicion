@@ -15,7 +15,7 @@ const CORRECT_PRODUCT_PACKS = {
 };
 const OBSOLETE_PRODUCT_IDS = ['4171', 'BIDON'];
 
-function applyVerifiedStockV26() {
+function applyVerifiedStockV27() {
   if (!db) return;
   db.products = (db.products || []).filter(p => !OBSOLETE_PRODUCT_IDS.includes(p.id));
   OBSOLETE_PRODUCT_IDS.forEach(id => {
@@ -25,18 +25,17 @@ function applyVerifiedStockV26() {
   (db.products || []).forEach(p => {
     if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
   });
-  if (localStorage.getItem('talca_stock_verified_v26') !== '1') {
+  if (localStorage.getItem('talca_stock_verified_v27') !== '1') {
     db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
     OBSOLETE_PRODUCT_IDS.forEach(id => {
       delete db.stock[id];
       if (db.stockBuckets) delete db.stockBuckets[id];
     });
     safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
-    safeSet(localStorage, 'talca_stock_verified_v26', '1');
-    localStorage.removeItem('talca_stock_pushed_v26');
+    safeSet(localStorage, 'talca_stock_verified_v27', '1');
   }
 }
-applyVerifiedStockV26();
+applyVerifiedStockV27();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
@@ -54,34 +53,41 @@ function mergeList(local, cloud) {
 }
 
 docRef.onSnapshot((doc) => {
+  isFirebaseReady = true;
   if (doc.exists) {
     let cloudDb = doc.data();
-    // Blindaje: Solo actualizar campos si la nube tiene datos reales y no vacíos
-    if (cloudDb.stock && Object.keys(cloudDb.stock).length > 0) {
-      // Blindaje: si la nube aún tiene stock antiguo previo a la reconstrucción, conservar el verificado y subirlo
-      if (cloudDb.stock['5670'] !== VERIFIED_STOCK_OCT13_2000['5670'] && !localStorage.getItem('talca_stock_pushed_v26')) {
-        console.warn('Blindaje: Se retiene el stock verificado frente a snapshot antiguo de Firestore.');
-        db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
-        OBSOLETE_PRODUCT_IDS.forEach(id => {
-          delete db.stock[id];
-          if (db.stockBuckets) delete db.stockBuckets[id];
-        });
-        save();
-        localStorage.setItem('talca_stock_pushed_v26', '1');
-      } else {
-        db.stock = cloudDb.stock;
-        OBSOLETE_PRODUCT_IDS.forEach(id => {
-          if (db.stock && db.stock[id] !== undefined) delete db.stock[id];
-          if (db.stockBuckets && db.stockBuckets[id] !== undefined) delete db.stockBuckets[id];
-        });
-      }
+    // Blindaje de integridad: detectar si la nube tuviese stock degradado o arcaico
+    let isCloudCorrupted = !cloudDb.stock || !cloudDb.stock['5670'] || Number(cloudDb.stock['5670']) < 100000 || cloudDb.stock['4171'] !== undefined || cloudDb.stock['BIDON'] !== undefined;
+    
+    if (isCloudCorrupted) {
+      console.warn('Blindaje: Se detectó stock degradado/obsoleto en Firestore. Sobreescribiendo con verificado...');
+      db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+      OBSOLETE_PRODUCT_IDS.forEach(id => {
+        delete db.stock[id];
+        if (db.stockBuckets) delete db.stockBuckets[id];
+      });
+      save();
+    } else {
+      db.stock = cloudDb.stock;
+      OBSOLETE_PRODUCT_IDS.forEach(id => {
+        if (db.stock && db.stock[id] !== undefined) delete db.stock[id];
+        if (db.stockBuckets && db.stockBuckets[id] !== undefined) delete db.stockBuckets[id];
+      });
     }
+
     if (cloudDb.stockBuckets && Object.keys(cloudDb.stockBuckets).length > 0) {
       db.stockBuckets = cloudDb.stockBuckets;
       OBSOLETE_PRODUCT_IDS.forEach(id => {
         if (db.stockBuckets && db.stockBuckets[id] !== undefined) delete db.stockBuckets[id];
       });
     }
+    // Asegurar que el saldo físico de cada producto en stockBuckets coincida con db.stock
+    (db.products || []).forEach(p => {
+      if (typeof v1EnsureBucket === 'function') {
+        v1EnsureBucket(p.id).physical = db.stock[p.id] || 0;
+      }
+    });
+
     if (cloudDb.products && cloudDb.products.length > 0) {
       db.products = mergeList(db.products, cloudDb.products).filter(p => !OBSOLETE_PRODUCT_IDS.includes(p.id));
       (db.products || []).forEach(p => {
@@ -118,7 +124,6 @@ docRef.onSnapshot((doc) => {
       console.warn('Blindaje: Se bloqueó la creación de talca/data porque los datos locales son insuficientes (fleteros:', fleterosCount, ')');
     }
   }
-  isFirebaseReady = true;
   try { if(typeof fillLoginUsers === 'function') fillLoginUsers(); } catch(e){}
   try { if(typeof renderAll === 'function') renderAll(); } catch(e){}
 }, (err) => {
