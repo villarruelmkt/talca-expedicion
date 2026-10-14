@@ -39,6 +39,10 @@ applyVerifiedStockV27();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
+const APP_BUILD_VERSION = 31;
+let hasInitialCloudSync = false;
+let lastCloudUpdatedAt = null;
+
 let lastSyncedDb = {
   orders: new Map(), movements: new Map(), audit: new Map(), materialMoves: new Map(), counts: new Map()
 };
@@ -56,6 +60,32 @@ docRef.onSnapshot((doc) => {
   isFirebaseReady = true;
   if (doc.exists) {
     let cloudDb = doc.data();
+
+    // REGLA 2: Detección automática de versión obsoleta en cliente y recarga forzada
+    if (cloudDb.appVersion && Number(cloudDb.appVersion) > APP_BUILD_VERSION) {
+      console.warn(`Versión obsoleta detectada en este equipo (Local: v${APP_BUILD_VERSION}, Nube: v${cloudDb.appVersion}). Actualizando sistema y recargando...`);
+      try {
+        if (typeof toast === 'function') toast('Nueva versión del sistema disponible. Actualizando...', 'info');
+      } catch(e){}
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for (let r of regs) r.unregister();
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          for (let n of names) caches.delete(n);
+        });
+      }
+      setTimeout(() => {
+        location.reload(true);
+      }, 1500);
+      return;
+    }
+
+    // REGLA 1 & 3: Registro de sincronización inicial y timestamp de la nube
+    hasInitialCloudSync = true;
+    lastCloudUpdatedAt = cloudDb.updatedAt || null;
     // Blindaje de integridad: detectar si la nube tuviese stock degradado o arcaico
     let isCloudCorrupted = !cloudDb.stock || !cloudDb.stock['5670'] || Number(cloudDb.stock['5670']) < 100000 || cloudDb.stock['4171'] !== undefined || cloudDb.stock['BIDON'] !== undefined;
     
@@ -119,6 +149,9 @@ docRef.onSnapshot((doc) => {
     if (fleterosCount >= 10 && hasStock) {
       let clone = { ...db };
       delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
+      clone.updatedAt = new Date().toISOString();
+      clone.appVersion = APP_BUILD_VERSION;
+      clone.lastSavedBy = session?.user || 'Sistema';
       docRef.set(clone).catch(console.error);
     } else {
       console.warn('Blindaje: Se bloqueó la creación de talca/data porque los datos locales son insuficientes (fleteros:', fleterosCount, ')');
@@ -210,12 +243,24 @@ function save(){
       }
    });
 
+      // REGLA 3: Bloquear cualquier subida a Firestore si aún no se recibió la sincronización inicial
+   if (!hasInitialCloudSync) {
+     console.warn('Guardado en Firestore en pausa: esperando sincronización inicial desde la nube...');
+     return;
+   }
+
    // Blindaje crítico: NUNCA sobreescribir el documento maestro en la nube si los datos locales parecen incompletos
    let fleterosCount = (db.fleteros || []).length;
    let hasStock = Object.keys(db.stock || {}).length > 0;
-   if (fleterosCount >= 5 && hasStock) {
+   if (fleterosCount >= 10 && hasStock) {
      let clone = { ...db };
      delete clone.audit; delete clone.movements; delete clone.orders; delete clone.materialMoves; delete clone.counts;
+     // REGLA 1: Estampado de versión, timestamp y autor
+     clone.updatedAt = new Date().toISOString();
+     clone.appVersion = APP_BUILD_VERSION;
+     clone.lastSavedBy = (session && session.user && (session.user.displayName || session.user.username || session.user.email)) || (typeof session?.user === 'string' ? session.user : 'Desconocido');
+     lastCloudUpdatedAt = clone.updatedAt;
+
      docRef.set(clone).catch(err => {
        console.warn('Error al guardar documento maestro en la nube:', err);
      });
