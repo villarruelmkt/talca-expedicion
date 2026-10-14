@@ -163,16 +163,6 @@
       "employeeBenefit": true
     },
     {
-      "id": "4171",
-      "name": "Soda 500 ml",
-      "pack": 12,
-      "perCut": 15,
-      "cuts": 4,
-      "alias": "",
-      "active": false,
-      "employeeBenefit": false
-    },
-    {
       "id": "4910",
       "name": "Soda sifón 2 L",
       "pack": 6,
@@ -180,16 +170,6 @@
       "cuts": 4,
       "alias": "SIF",
       "active": true,
-      "employeeBenefit": false
-    },
-    {
-      "id": "BIDON",
-      "name": "Bidón de agua",
-      "pack": 1,
-      "perCut": 15,
-      "cuts": 4,
-      "alias": "",
-      "active": false,
       "employeeBenefit": false
     },
     {
@@ -1022,7 +1002,6 @@
   ],
   "stock": {
     "417": 10019,
-    "4171": 0,
     "4900": 79208,
     "4910": 26934,
     "5051": 19626,
@@ -1042,8 +1021,7 @@
     "5690": 42451,
     "8670": 20414,
     "8680": 66954,
-    "8687": 1262,
-    "BIDON": 0
+    "8687": 1262
   },
   "stockBuckets": {
     "417": {
@@ -1055,15 +1033,6 @@
       "oesteMendoza": 0,
       "oesteJeremias": 0,
       "administrative": 0
-    },
-    "4171": {
-      "physical": 0,
-      "preventa": 0,
-      "distriC": 0,
-      "distriInterior": 0,
-      "sinCodificar": 0,
-      "oesteMendoza": 0,
-      "oesteJeremias": 0
     },
     "4900": {
       "physical": 79688,
@@ -1257,16 +1226,6 @@
     },
     "8687": {
       "physical": 1262,
-      "preventa": 0,
-      "distriC": 0,
-      "distriInterior": 0,
-      "sinCodificar": 0,
-      "oesteMendoza": 0,
-      "oesteJeremias": 0,
-      "administrative": 0
-    },
-    "BIDON": {
-      "physical": 0,
       "preventa": 0,
       "distriC": 0,
       "distriInterior": 0,

@@ -30,9 +30,9 @@ const PRODUCT_SEED=[
  {id:'5071',name:'Talca Pomelo 500 ml',pack:12,perCut:20,cuts:7},
  {id:'8670',name:'Agua 2 L',pack:6,perCut:20,cuts:4},
  {id:'4900',name:'Soda 2,25 L',pack:6,perCut:20,cuts:4},
- {id:'4171',name:'Soda 500 ml',pack:12,perCut:20,cuts:7},
+ {id:'417',name:'Soda 500 ml',pack:12,perCut:20,cuts:7},
  {id:'4910',name:'Soda sifón 2 L',pack:6,perCut:20,cuts:4},
- {id:'BIDON',name:'Bidón de agua',pack:1,perCut:42,cuts:2}
+ {id:'8687',name:'Bidón de agua',pack:1,perCut:42,cuts:2}
 ];
 const DEMO={
  audit:[],

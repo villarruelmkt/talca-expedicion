@@ -5,28 +5,38 @@ let db=load();
 const VERIFIED_STOCK_OCT13_2000 = {
   "5670": 179739, "5675": 53124, "5680": 62617, "5685": 46342, "5690": 42451,
   "5051": 19626,  "5056": 12969, "5061": 26419, "5066": 13184, "5071": 11482,
-  "8670": 20414,  "4900": 79208, "4171": 0,     "4910": 26934, "BIDON": 0,
+  "8670": 20414,  "4900": 79208, "4910": 26934,
   "5200": 3614,   "5205": 3396,  "5210": 0,     "5215": 2046,  "5220": 1902,
   "8687": 1262,   "8680": 66954, "417": 10019
 };
 const CORRECT_PRODUCT_PACKS = {
   "5051": 12, "5056": 12, "5061": 12, "5066": 12, "5071": 12,
-  "8680": 12, "417": 12, "4171": 12, "8687": 1, "BIDON": 1
+  "8680": 12, "417": 12, "8687": 1
 };
+const OBSOLETE_PRODUCT_IDS = ['4171', 'BIDON'];
 
-function applyVerifiedStockV25() {
+function applyVerifiedStockV26() {
   if (!db) return;
+  db.products = (db.products || []).filter(p => !OBSOLETE_PRODUCT_IDS.includes(p.id));
+  OBSOLETE_PRODUCT_IDS.forEach(id => {
+    if (db.stock && db.stock[id] !== undefined) delete db.stock[id];
+    if (db.stockBuckets && db.stockBuckets[id] !== undefined) delete db.stockBuckets[id];
+  });
   (db.products || []).forEach(p => {
     if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
   });
-  if (localStorage.getItem('talca_stock_verified_v25') !== '1') {
+  if (localStorage.getItem('talca_stock_verified_v26') !== '1') {
     db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+    OBSOLETE_PRODUCT_IDS.forEach(id => {
+      delete db.stock[id];
+      if (db.stockBuckets) delete db.stockBuckets[id];
+    });
     safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
-    safeSet(localStorage, 'talca_stock_verified_v25', '1');
-    localStorage.removeItem('talca_stock_pushed_v25');
+    safeSet(localStorage, 'talca_stock_verified_v26', '1');
+    localStorage.removeItem('talca_stock_pushed_v26');
   }
 }
-applyVerifiedStockV25();
+applyVerifiedStockV26();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
@@ -36,10 +46,10 @@ let lastSyncedDb = {
 function fastHash(obj) { return JSON.stringify(obj); }
 
 function mergeList(local, cloud) {
-   if (!cloud || !cloud.length) return local || [];
-   if (!local || !local.length) return cloud || [];
-   let map = new Map((local || []).map(x => [x.id, x]));
-   (cloud || []).forEach(x => map.set(x.id, x));
+   if (!cloud || !cloud.length) return (local || []).filter(x => !OBSOLETE_PRODUCT_IDS.includes(x.id));
+   if (!local || !local.length) return (cloud || []).filter(x => !OBSOLETE_PRODUCT_IDS.includes(x.id));
+   let map = new Map((local || []).filter(x => !OBSOLETE_PRODUCT_IDS.includes(x.id)).map(x => [x.id, x]));
+   (cloud || []).filter(x => !OBSOLETE_PRODUCT_IDS.includes(x.id)).forEach(x => map.set(x.id, x));
    return Array.from(map.values());
 }
 
@@ -49,20 +59,31 @@ docRef.onSnapshot((doc) => {
     // Blindaje: Solo actualizar campos si la nube tiene datos reales y no vacíos
     if (cloudDb.stock && Object.keys(cloudDb.stock).length > 0) {
       // Blindaje: si la nube aún tiene stock antiguo previo a la reconstrucción, conservar el verificado y subirlo
-      if (cloudDb.stock['5670'] !== VERIFIED_STOCK_OCT13_2000['5670'] && !localStorage.getItem('talca_stock_pushed_v25')) {
+      if (cloudDb.stock['5670'] !== VERIFIED_STOCK_OCT13_2000['5670'] && !localStorage.getItem('talca_stock_pushed_v26')) {
         console.warn('Blindaje: Se retiene el stock verificado frente a snapshot antiguo de Firestore.');
         db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+        OBSOLETE_PRODUCT_IDS.forEach(id => {
+          delete db.stock[id];
+          if (db.stockBuckets) delete db.stockBuckets[id];
+        });
         save();
-        localStorage.setItem('talca_stock_pushed_v25', '1');
+        localStorage.setItem('talca_stock_pushed_v26', '1');
       } else {
         db.stock = cloudDb.stock;
+        OBSOLETE_PRODUCT_IDS.forEach(id => {
+          if (db.stock && db.stock[id] !== undefined) delete db.stock[id];
+          if (db.stockBuckets && db.stockBuckets[id] !== undefined) delete db.stockBuckets[id];
+        });
       }
     }
     if (cloudDb.stockBuckets && Object.keys(cloudDb.stockBuckets).length > 0) {
       db.stockBuckets = cloudDb.stockBuckets;
+      OBSOLETE_PRODUCT_IDS.forEach(id => {
+        if (db.stockBuckets && db.stockBuckets[id] !== undefined) delete db.stockBuckets[id];
+      });
     }
     if (cloudDb.products && cloudDb.products.length > 0) {
-      db.products = mergeList(db.products, cloudDb.products);
+      db.products = mergeList(db.products, cloudDb.products).filter(p => !OBSOLETE_PRODUCT_IDS.includes(p.id));
       (db.products || []).forEach(p => {
         if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
       });
