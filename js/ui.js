@@ -96,7 +96,17 @@ function renderAll(){
 
   try {
     let el = document.getElementById('fleterosList');
-    if(el) el.innerHTML=(db.fleteros||[]).map(f=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${f.name} ${f.surname||''}</b><br><span class="muted">${f.company||'Sin empresa indicada'}</span><div class="right"><button class="btn btn-secondary" onclick="editFletero('${f.id}')">Modificar</button></div></div>`).join('');
+    if(el) el.innerHTML=(db.fleteros||[]).map(f=>`
+      <div style="padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <b>${f.name} ${f.surname||''}</b> ${f.active===false?'<span style="color:#ef4444;font-size:12px;font-weight:bold;">(Inactivo)</span>':''}
+          <br><span class="muted">${f.company||'Sin empresa indicada'}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="editFletero('${f.id}')">Modificar</button>
+          <button class="btn btn-danger" style="padding:4px 8px;font-size:12px;" onclick="deleteFleteroDirect('${f.id}')">Eliminar</button>
+        </div>
+      </div>`).join('');
   } catch(e) { console.error("renderAll fleterosList error", e); }
 
   try {

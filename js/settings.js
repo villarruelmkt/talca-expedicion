@@ -93,18 +93,96 @@ function editFletero(id){
         <div><label>Nombre:</label><input id="i_n" class="field" value="${f.name}"></div>
         <div><label>Apellido:</label><input id="i_s" class="field" value="${f.surname||''}"></div>
         <div><label>Empresa:</label><input id="i_c" class="field" value="${f.company||''}"></div>
+        <div><label>Estado:</label>
+            <select id="i_a" class="field">
+                <option value="1" ${f.active!==false?'selected':''}>Activo (visible en listas)</option>
+                <option value="0" ${f.active===false?'selected':''}>Inactivo (oculto en listas)</option>
+            </select>
+        </div>
     </div>
-    <div class="right" style="margin-top: 24px;">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-primary" id="btnSave">Guardar</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;">
+        <button class="btn btn-danger" id="btnDeleteFletero">Eliminar fletero</button>
+        <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" id="btnSave">Guardar</button>
+        </div>
     </div>`;
     modal(html);
     document.getElementById('btnSave').onclick = () => {
         let n = document.getElementById('i_n').value.trim();
         if(!n) return toast('El nombre es obligatorio', 'error');
         f.name=n; f.surname=document.getElementById('i_s').value.trim(); f.company=document.getElementById('i_c').value.trim();
+        f.active = document.getElementById('i_a').value === "1";
         save(); closeModal(); toast('Fletero editado');
     };
+    document.getElementById('btnDeleteFletero').onclick = () => {
+        customConfirm(`¿Eliminar definitivamente al fletero "${f.name} ${f.surname||''}"?`, () => {
+            db.fleteros = db.fleteros.filter(x => x.id !== id);
+            audit('Baja','Fletero',f.name,f.company||'');
+            save(); closeModal(); toast('Fletero eliminado correctamente');
+        });
+    };
+}
+
+function deleteFleteroDirect(id){
+    let f = db.fleteros.find(x=>x.id===id); if(!f) return;
+    customConfirm(`¿Eliminar definitivamente al fletero "${f.name} ${f.surname||''}"?`, () => {
+        db.fleteros = db.fleteros.filter(x => x.id !== id);
+        audit('Baja','Fletero',f.name,f.company||'');
+        save(); toast('Fletero eliminado');
+    });
+}
+
+function cleanDuplicateFleteros(){
+    let map = new Map();
+    let duplicates = 0;
+    let oldToNewId = new Map();
+    
+    (db.fleteros || []).forEach(f => {
+        let key = (f.name || '').trim().toUpperCase();
+        if(!key) return;
+        if(!map.has(key)) map.set(key, []);
+        map.get(key).push(f);
+    });
+
+    let toKeep = [];
+    for(let [key, list] of map.entries()){
+        if(list.length === 1){
+            toKeep.push(list[0]);
+        } else {
+            // Priorizar el fletero proveniente de la lista de rescate
+            list.sort((a, b) => {
+                let aScore = (a.id.startsWith('fmth') || a.id.startsWith('fmtr') || a.id.startsWith('fmux') || a.id.startsWith('fmuy') || a.id === 'f1' || a.id === 'f2') ? 2 : 1;
+                let bScore = (b.id.startsWith('fmth') || b.id.startsWith('fmtr') || b.id.startsWith('fmux') || b.id.startsWith('fmuy') || b.id === 'f1' || b.id === 'f2') ? 2 : 1;
+                return bScore - aScore;
+            });
+            let winner = list[0];
+            toKeep.push(winner);
+            for(let i = 1; i < list.length; i++){
+                oldToNewId.set(list[i].id, winner.id);
+                duplicates++;
+            }
+        }
+    }
+
+    if(duplicates === 0) return toast('No se encontraron fleteros con nombres duplicados.', 'info');
+
+    customConfirm(`Se detectaron ${duplicates} fleteros duplicados por nombre. ¿Desea eliminarlos y reasignar automáticamente sus órdenes al fletero principal?`, () => {
+        (db.orders || []).forEach(o => {
+            if(o.fleteroId && oldToNewId.has(o.fleteroId)){
+                o.fleteroId = oldToNewId.get(o.fleteroId);
+            }
+        });
+        (db.materialMoves || []).forEach(m => {
+            if(m.fleteroId && oldToNewId.has(m.fleteroId)){
+                m.fleteroId = oldToNewId.get(m.fleteroId);
+            }
+        });
+        db.fleteros = toKeep;
+        audit('Depuración', 'Fleteros', `${duplicates} duplicados`, 'Fusión automática por nombre');
+        save();
+        toast(`Se eliminaron ${duplicates} fleteros duplicados exitosamente`);
+    });
 }
 
 function addEmployee(){

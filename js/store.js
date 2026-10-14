@@ -334,7 +334,7 @@ document.getElementById('modal').onclick=e=>{if(e.target.id==='modal')closeModal
 window.addEventListener('beforeprint',()=>{if(currentPrintBody)renderPrintArea()});
 window.addEventListener('afterprint',()=>{let a=document.getElementById('printArea');if(a)a.innerHTML=''});
 function productOptions(){return db.products.filter(p=>p.active!==false).map(p=>`<option value="${p.id}">${p.id} · ${p.name}</option>`).join('')}
-function fleteroOptions(){return db.fleteros.map(f=>`<option value="${f.id}">${f.name}${f.surname?' '+f.surname:''}</option>`).join('')}
+function fleteroOptions(){return (db.fleteros||[]).filter(f=>f.active!==false).map(f=>`<option value="${f.id}">${f.name}${f.surname?' '+f.surname:''}</option>`).join('')}
 function employeeOptions(){return db.employees.filter(e=>e.active).map(e=>`<option value="${e.id}">${e.legajo} · ${e.name} ${e.surname}</option>`).join('')}
 function normalize(packs,units,prod){let total=Number(packs||0)*prod.pack+Number(units||0);return {total,packs:Math.floor(total/prod.pack),units:total%prod.pack}}
 var v1StockUnit = 'fardos';

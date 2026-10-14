@@ -196,7 +196,7 @@ window.addEventListener('unhandledrejection', function(event) {
   <div class="headrow"><div><h1>Configuración provisional</h1><div class="muted">Base de datos v1 con migración automática y respaldo previo.</div></div><div class="toolbar"><button class="btn btn-primary" onclick="showBackupManagerV1()">Copias de seguridad</button></div></div>
   <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
     <div class="card"><div class="headrow"><h3>Usuarios</h3><button class="btn btn-secondary" onclick="addUser()">Agregar</button></div><div id="usersList"></div></div>
-    <div class="card"><div class="headrow"><h3>Fleteros</h3><button class="btn btn-secondary" onclick="addFletero()">Agregar</button></div><div id="fleterosList"></div></div>
+    <div class="card"><div class="headrow"><h3>Fleteros</h3><div><button class="btn btn-secondary" onclick="cleanDuplicateFleteros()">Depurar duplicados</button> <button class="btn btn-secondary" onclick="addFletero()">Agregar</button></div></div><div id="fleterosList"></div></div>
     <div class="card"><div class="headrow"><h3>Empleados</h3><div><button class="btn btn-secondary" onclick="manualAccreditEmployees()">Acreditar fardos</button> <button class="btn btn-secondary" onclick="addEmployee()">Agregar</button></div></div><div id="employeeConfigList"></div></div>
     <div class="card"><div class="headrow"><h3>Productos</h3><button class="btn btn-secondary" onclick="addProduct()">Agregar</button></div><div id="productsList"></div></div>
   </div>
@@ -227,7 +227,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 
 
-<script src="app.min.js?v=28" charset="utf-8"></script>
+<script src="app.min.js?v=29" charset="utf-8"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
