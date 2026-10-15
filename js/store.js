@@ -89,26 +89,37 @@ docRef.onSnapshot((doc) => {
   if (doc.exists) {
     let cloudDb = doc.data();
 
-    // REGLA 2: Detección automática de versión obsoleta en cliente y recarga forzada
+    // REGLA 2: Detección automática de versión obsoleta en cliente con blindaje anti-bucle
     if (cloudDb.appVersion && Number(cloudDb.appVersion) > APP_BUILD_VERSION) {
-      console.warn(`Versión obsoleta detectada en este equipo (Local: v${APP_BUILD_VERSION}, Nube: v${cloudDb.appVersion}). Actualizando sistema y recargando...`);
-      try {
-        if (typeof toast === 'function') toast('Nueva versión del sistema disponible. Actualizando...', 'info');
-      } catch(e){}
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(regs => {
-          for (let r of regs) r.unregister();
-        });
+      let reloadKey = `talca_reload_v${cloudDb.appVersion}`;
+      let nowTime = Date.now();
+      let lastReload = Number(localStorage.getItem(reloadKey) || sessionStorage.getItem(reloadKey) || 0);
+
+      // Blindaje anti-bucle: Si ya intentó recargar por esta versión en los últimos 60 segundos, NO volver a recargar
+      if (lastReload && (nowTime - lastReload < 60000)) {
+        console.warn(`Blindaje anti-bucle activo: Ya se intentó actualizar a v${cloudDb.appVersion} hace menos de 60s. Continuando con la versión actual (v${APP_BUILD_VERSION}) para no bloquear la interfaz.`);
+      } else {
+        localStorage.setItem(reloadKey, String(nowTime));
+        sessionStorage.setItem(reloadKey, String(nowTime));
+        console.warn(`Versión obsoleta detectada en este equipo (Local: v${APP_BUILD_VERSION}, Nube: v${cloudDb.appVersion}). Actualizando sistema y recargando...`);
+        try {
+          if (typeof toast === 'function') toast('Nueva versión del sistema disponible. Actualizando...', 'info');
+        } catch(e){}
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            for (let r of regs) r.unregister();
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            for (let n of names) caches.delete(n);
+          });
+        }
+        setTimeout(() => {
+          location.reload();
+        }, 1500);
+        return;
       }
-      if ('caches' in window) {
-        caches.keys().then(names => {
-          for (let n of names) caches.delete(n);
-        });
-      }
-      setTimeout(() => {
-        location.reload(true);
-      }, 1500);
-      return;
     }
 
     // REGLA 1 & 3: Registro de sincronización inicial y timestamp de la nube
