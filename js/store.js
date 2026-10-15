@@ -41,7 +41,7 @@ applyVerifiedStockV27();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 33;
+const APP_BUILD_VERSION = 34;
 let hasInitialCloudSync = false;
 let hasCollectionsInitialSync = {
   orders: false, movements: false, audit: false, materialMoves: false, counts: false

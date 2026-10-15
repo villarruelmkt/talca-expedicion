@@ -2390,6 +2390,13 @@ function generateOrdersDispatchSummaryHtml() {
   }
 
   let list=(db.orders||[]).filter(o=>{
+    let st = Array.isArray(o.requestLines) ? (typeof v11OrderStatus === 'function' ? v11OrderStatus(o) : o.status) : o.status;
+    let isDespachada = (st === 'Despachada' || st === 'Completa' || o.status === 'Despachada' || o.status === 'Completa') && st !== 'Anulada' && o.status !== 'Anulada';
+    if (typeof v11OrderOutstanding === 'function' && Array.isArray(o.requestLines) && v11OrderOutstanding(o) > 0) {
+      isDespachada = false;
+    }
+    if (!isDespachada) return false;
+
     let ds=o.deliveries||[];
     return(!carrier||o.fleteroId===carrier)&&
           (!date||o.date===date)&&
@@ -2398,11 +2405,18 @@ function generateOrdersDispatchSummaryHtml() {
   });
 
   list.forEach(o => {
-    (o.deliveries||[]).forEach(d => {
-      (d.lines||[]).forEach(l => {
-        addFardos(l.productId, l.total);
+    let ds = o.deliveries || [];
+    if (ds.length > 0) {
+      ds.forEach(d => {
+        (d.lines || []).forEach(l => {
+          addFardos(l.productId, l.total);
+        });
       });
-    });
+    } else if (Array.isArray(o.requestLines) && o.requestLines.length > 0) {
+      o.requestLines.forEach(l => {
+        addFardos(l.productId, l.resolvedTotal || l.total);
+      });
+    }
   });
 
   if (!carrier) {
@@ -2443,13 +2457,13 @@ function generateOrdersDispatchSummaryHtml() {
     html += `<tr>
       <td style="padding: 4px;">${pid}</td>
       <td style="padding: 4px;">${v14Text(p.name)}</td>
-      <td style="padding: 4px; text-align: right;">${v15FormatFardos(qty * p.pack)}</td>
+      <td style="padding: 4px; text-align: right;">${v15FormatFardos(qty)}</td>
     </tr>`;
   });
 
   html += `<tr style="background: var(--soft); font-weight: bold;">
     <td colspan="2" style="padding: 4px; text-align: right;">TOTAL GENERAL</td>
-    <td style="padding: 4px; text-align: right;">${totalBultos.toFixed(1).replace(/\\.0$/, '')} fardos</td>
+    <td style="padding: 4px; text-align: right;">${v15FormatFardos(totalBultos)}</td>
   </tr></tbody></table></div>`;
   
   return html;
