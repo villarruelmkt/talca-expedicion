@@ -2120,6 +2120,14 @@ printSection=function(id,title){
     headerHtml=`<div style="margin-bottom:12px;font-size:13px;color:#333;"><b>Impreso:</b> ${fmtDate(now())} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(session.user)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(session.shift)}</div>`;
   }
   if(id==='orders'){
+    let fCarrier = document.getElementById('ofCarrier')?.value;
+    let fCarrierText = fCarrier ? ((db.fleteros||[]).find(f => f.id === fCarrier)?.name || fCarrier) : 'Todos';
+    let fDate = document.getElementById('ofDate')?.value || 'Todas';
+    let fUser = document.getElementById('ofUser')?.value || 'Todos';
+    let fShift = document.getElementById('ofShift')?.value || 'Todos';
+
+    headerHtml=`<div style="margin-bottom:12px;font-size:12px;color:#333;background:#f5f5f5;padding:6px 10px;border-radius:4px;"><b>Filtros aplicados:</b> &nbsp; <b>Fecha:</b> ${v14Text(fDate)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(fShift)} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(fUser)} &nbsp;·&nbsp; <b>Fletero:</b> ${v14Text(fCarrierText)}</div>`;
+
     let summaryHtml = generateOrdersDispatchSummaryHtml();
     clone.innerHTML += summaryHtml;
   }
@@ -2389,33 +2397,41 @@ function generateOrdersDispatchSummaryHtml() {
     qtyByProduct[pid] = (qtyByProduct[pid] || 0) + fardos;
   }
 
-  let list=(db.orders||[]).filter(o=>{
+  (db.orders||[]).forEach(o => {
     let st = Array.isArray(o.requestLines) ? (typeof v11OrderStatus === 'function' ? v11OrderStatus(o) : o.status) : o.status;
-    let isDespachada = (st === 'Despachada' || st === 'Completa' || o.status === 'Despachada' || o.status === 'Completa') && st !== 'Anulada' && o.status !== 'Anulada';
-    if (typeof v11OrderOutstanding === 'function' && Array.isArray(o.requestLines) && v11OrderOutstanding(o) > 0) {
-      isDespachada = false;
-    }
-    if (!isDespachada) return false;
+    if (st === 'Anulada' || o.status === 'Anulada') return;
+    if (carrier && o.fleteroId !== carrier) return;
 
-    let ds=o.deliveries||[];
-    return(!carrier||o.fleteroId===carrier)&&
-          (!date||o.date===date)&&
-          (!user||o.createdBy===user||ds.some(d=>d.user===user))&&
-          (!shift||o.createdShift===shift||ds.some(d=>d.shift===shift));
-  });
-
-  list.forEach(o => {
     let ds = o.deliveries || [];
     if (ds.length > 0) {
+      // Discriminar cada entrega por fecha, encargado y turno
       ds.forEach(d => {
+        let dDate = d.date ? d.date.slice(0, 10) : o.date;
+        if (date && dDate !== date) return;
+        if (user && d.user !== user) return;
+        if (shift && d.shift !== shift) return;
+
         (d.lines || []).forEach(l => {
           addFardos(l.productId, l.total);
         });
       });
-    } else if (Array.isArray(o.requestLines) && o.requestLines.length > 0) {
-      o.requestLines.forEach(l => {
-        addFardos(l.productId, l.resolvedTotal || l.total);
-      });
+    } else {
+      // Órdenes sin desglose de entregas (históricas o directas): solo si se despacharon
+      let isDespachada = (st === 'Despachada' || st === 'Completa' || o.status === 'Despachada' || o.status === 'Completa');
+      if (typeof v11OrderOutstanding === 'function' && Array.isArray(o.requestLines) && v11OrderOutstanding(o) > 0) {
+        isDespachada = false;
+      }
+      if (!isDespachada) return;
+
+      if (date && o.date !== date) return;
+      if (user && o.createdBy !== user) return;
+      if (shift && o.createdShift !== shift) return;
+
+      if (Array.isArray(o.requestLines)) {
+        o.requestLines.forEach(l => {
+          addFardos(l.productId, l.resolvedTotal || l.total);
+        });
+      }
     }
   });
 

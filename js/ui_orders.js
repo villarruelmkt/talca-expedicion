@@ -221,19 +221,54 @@ function renderOrdersV16(){
       shift=document.getElementById('ofShift')?.value||'';
 
   let list=(db.orders||[]).filter(o=>{
-    let ds=o.deliveries||[];
-    return(!carrier||o.fleteroId===carrier)&&
-          (!date||o.date===date)&&
-          (!user||o.createdBy===user||ds.some(d=>d.user===user))&&
-          (!shift||o.createdShift===shift||ds.some(d=>d.shift===shift));
+    if (carrier && o.fleteroId !== carrier) return false;
+    let ds = o.deliveries || [];
+
+    if (date) {
+      let matchesDate = (o.date === date) || ds.some(d => (d.date && d.date.slice(0, 10) === date));
+      if (!matchesDate) return false;
+    }
+
+    if (user && shift) {
+      let matches = ds.length > 0
+        ? ds.some(d => d.user === user && d.shift === shift && (!date || (d.date && d.date.slice(0, 10) === date) || (!d.date && o.date === date)))
+        : (o.createdBy === user && o.createdShift === shift);
+      if (!matches) return false;
+    } else if (user) {
+      let matches = ds.length > 0
+        ? ds.some(d => d.user === user && (!date || (d.date && d.date.slice(0, 10) === date) || (!d.date && o.date === date)))
+        : (o.createdBy === user);
+      if (!matches) return false;
+    } else if (shift) {
+      let matches = ds.length > 0
+        ? ds.some(d => d.shift === shift && (!date || (d.date && d.date.slice(0, 10) === date) || (!d.date && o.date === date)))
+        : (o.createdShift === shift);
+      if (!matches) return false;
+    }
+
+    return true;
   }).sort(v16NaturalCompareDesc);
 
   body.innerHTML=list.map(o=>{
     let f=v13OrderCarrier(o),ds=o.deliveries||[];
     let req=Array.isArray(o.requestLines)?v15OrderRequestedFardos(o):0;
     let del=Array.isArray(o.requestLines)?v15OrderDeliveredFardos(o):0;
-    let last=ds.at(-1)||{},
-        status=Array.isArray(o.requestLines)?v11OrderStatus(o):o.status,
+
+    let matchingDeliveries = ds.filter(d => {
+      let dDate = d.date ? d.date.slice(0, 10) : o.date;
+      if (date && dDate !== date) return false;
+      if (user && d.user !== user) return false;
+      if (shift && d.shift !== shift) return false;
+      return true;
+    });
+    let relevantDelivery = (user || shift || date)
+      ? (matchingDeliveries.at(-1) || ds.at(-1) || {})
+      : (ds.at(-1) || {});
+
+    let displayUser = relevantDelivery.user || o.createdBy || '';
+    let displayShift = relevantDelivery.shift || o.createdShift || '';
+
+    let status=Array.isArray(o.requestLines)?v11OrderStatus(o):o.status,
         type=V11_PENDING_LABELS[o.pendingType||'legacy']||'Histórica',
         cls=status==='PENDIENTE'?'v13-admin-pending':
             String(status).includes('Pendiente')?'open':
@@ -246,8 +281,8 @@ function renderOrdersV16(){
       <td>${v14Text(o.date)}</td>
       <td>${v14Text(v13CarrierDisplay(f))}</td>
       <td>${v14Text(type)}</td>
-      <td>${v14Text(last.user||o.createdBy||'')}</td>
-      <td>${v14Text(last.shift||o.createdShift||'')}</td>
+      <td>${v14Text(displayUser)}</td>
+      <td>${v14Text(displayShift)}</td>
       <td><span class="status ${cls}">${v14Text(status)}</span></td>
       <td>${v15FormatFardos(req)}</td>
       <td>${v15FormatFardos(del)}</td>

@@ -66,7 +66,32 @@ function saveOrderDelivery(orderId){
 }
 
 
-function populateFilters(){if(document.getElementById('ofCarrier')){ofCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();mfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();if(document.getElementById('pfCarrier'))pfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();if(document.getElementById('pfProduct'))pfProduct.innerHTML='<option value="">Todos</option>'+productOptions()}if(document.getElementById('ofUser'))ofUser.innerHTML='<option value="">Todos</option>'+db.users.map(u=>`<option value="${u.displayName}">${u.displayName}</option>`).join('')}
+function populateFilters(){
+  let prevCarrier = document.getElementById('ofCarrier')?.value || '';
+  let prevUser = document.getElementById('ofUser')?.value || '';
+  let prevPfCarrier = document.getElementById('pfCarrier')?.value || '';
+  let prevMfCarrier = document.getElementById('mfCarrier')?.value || '';
+  let prevPfProduct = document.getElementById('pfProduct')?.value || '';
+
+  if(document.getElementById('ofCarrier')){
+    ofCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();
+    if(prevCarrier) ofCarrier.value = prevCarrier;
+    mfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();
+    if(prevMfCarrier) mfCarrier.value = prevMfCarrier;
+    if(document.getElementById('pfCarrier')) {
+      pfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();
+      if(prevPfCarrier) pfCarrier.value = prevPfCarrier;
+    }
+    if(document.getElementById('pfProduct')) {
+      pfProduct.innerHTML='<option value="">Todos</option>'+productOptions();
+      if(prevPfProduct) pfProduct.value = prevPfProduct;
+    }
+  }
+  if(document.getElementById('ofUser')) {
+    ofUser.innerHTML='<option value="">Todos</option>'+(db.users||[]).map(u=>`<option value="${u.displayName}">${u.displayName}</option>`).join('');
+    if(prevUser) ofUser.value = prevUser;
+  }
+}
 function clearOrderFilters(){ofCarrier.value='';ofDate.value='';ofUser.value='';ofShift.value='';renderOrders()}
 function clearMaterialFilters(){mfCarrier.value='';mfFrom.value='';mfTo.value='';mfSource.value='';renderMaterials()}
 function printSection(id,title){document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-target'));let p=document.getElementById(id);p.classList.add('print-target');let rt=p.querySelector('.report-title');if(rt)rt.textContent=title;window.print();p.classList.remove('print-target')}
