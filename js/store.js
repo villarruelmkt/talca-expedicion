@@ -1,4 +1,6 @@
 // --- MODULE: GLOBAL STATE & CORE UTILS ---
+var V16_SCHEMA_VERSION = 7;
+var session = safeJSON(safeGet(sessionStorage, 'talcaSession'), null);
 let db=load();
 
 // --- DEFINICIONES DE STOCK REAL VERIFICADO AL 13 DE OCTUBRE (CIERRE 20:00 - AJUSTE ÓRDENES) ---
@@ -39,8 +41,11 @@ applyVerifiedStockV27();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 32;
+const APP_BUILD_VERSION = 33;
 let hasInitialCloudSync = false;
+let hasCollectionsInitialSync = {
+  orders: false, movements: false, audit: false, materialMoves: false, counts: false
+};
 let lastCloudUpdatedAt = null;
 
 let lastMasterHashes = {
@@ -198,6 +203,7 @@ docRef.onSnapshot((doc) => {
 function setupCollectionListeners() {
   ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
     firestoreDb.collection(col).onSnapshot(snap => {
+       hasCollectionsInitialSync[col] = true;
        let updated = false;
        snap.docChanges().forEach(change => {
           if (change.type === 'added' || change.type === 'modified') {
@@ -209,8 +215,18 @@ function setupCollectionListeners() {
                 return;
              }
              let idx = (db[col]||[]).findIndex(x => x.id === data.id);
-             if (idx >= 0) db[col][idx] = data;
-             else { db[col] = db[col]||[]; db[col].push(data); }
+             if (idx >= 0) {
+                // Blindaje de preservación: Si local ya tiene entregas y el cambio entrante no las tiene (posible eco stale), preservar entregas
+                if (col === 'orders' && (db[col][idx].deliveries||[]).length > (data.deliveries||[]).length) {
+                   data.deliveries = db[col][idx].deliveries;
+                   data.requestLines = db[col][idx].requestLines;
+                   if (db[col][idx].status === 'Despachada') data.status = 'Despachada';
+                }
+                db[col][idx] = data;
+             } else {
+                db[col] = db[col]||[];
+                db[col].push(data);
+             }
              lastSyncedDb[col].set(data.id, fastHash(data));
              updated = true;
           }
@@ -237,7 +253,7 @@ setupCollectionListeners();
 // Se eliminó la re-escritura masiva de colecciones a los 5 segundos que provocaba agotamiento de cuota diaria (Error 429).
 // La sincronización en tiempo real es manejada de forma eficiente por los listeners y save().
 
-let session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
+session=safeJSON(safeGet(sessionStorage,'talcaSession'),null);
 
 function save(){
  db.schemaVersion = V16_SCHEMA_VERSION;
@@ -253,13 +269,44 @@ function save(){
  }
  
  if (isFirebaseReady) {
+   // REGLA 3: Bloquear cualquier subida a Firestore si aún no se recibió la sincronización inicial de talca/data
+   if (!hasInitialCloudSync) {
+     console.warn('Guardado en Firestore en pausa: esperando sincronización inicial desde la nube...');
+     return;
+   }
+
    // Diff & Sync: Solo subimos a colecciones los items modificados o nuevos
    ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
+      // Blindaje: NUNCA subir a Firestore si esta colección específica no ha recibido su primer snapshot de la nube
+      if (!hasCollectionsInitialSync[col]) {
+         return;
+      }
       let currentIds = new Set();
       (db[col] || []).forEach(item => {
          if (!item.id) return;
          currentIds.add(item.id);
          let hash = fastHash(item);
+
+         // Blindaje contra degradación de órdenes:
+         // Si la orden local no tiene entregas o está en PENDIENTE, pero en la nube ya estaba despachada o con entregas,
+         // NO sobreescribir la versión de la nube con la versión local degradada.
+         if (col === 'orders') {
+            let lastSyncedHash = lastSyncedDb[col].get(item.id);
+            if (lastSyncedHash) {
+               try {
+                  let lastSyncedObj = JSON.parse(lastSyncedHash);
+                  let remoteHasDeliveries = Boolean((lastSyncedObj.deliveries || []).length);
+                  let localHasDeliveries = Boolean((item.deliveries || []).length);
+                  let remoteIsDispatched = lastSyncedObj.status === 'Despachada' || lastSyncedObj.status === 'Completa';
+                  let localIsPending = item.status === 'PENDIENTE' || item.status === 'Pendiente de despacho';
+                  if ((remoteHasDeliveries && !localHasDeliveries) || (remoteIsDispatched && localIsPending)) {
+                     console.warn(`Blindaje de orden: Se bloqueó sobreescritura de orden N.° ${item.number} con estado local degradado.`);
+                     return;
+                  }
+               } catch(e){}
+            }
+         }
+
          if (lastSyncedDb[col].get(item.id) !== hash) {
             firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
             lastSyncedDb[col].set(item.id, hash);
@@ -274,12 +321,6 @@ function save(){
          }
       }
    });
-
-      // REGLA 3: Bloquear cualquier subida a Firestore si aún no se recibió la sincronización inicial
-   if (!hasInitialCloudSync) {
-     console.warn('Guardado en Firestore en pausa: esperando sincronización inicial desde la nube...');
-     return;
-   }
 
    // CAMINO A: Guardado granular y desacoplado mediante diffing de campos en talca/data
     let updatePayload = {};
@@ -486,7 +527,7 @@ function audit(action,entity,ref,detail=''){db.audit=db.audit||[];db.audit.push(
 
 // Auto-repair: Eliminar movimientos de materiales con fleteroId inválido
 setTimeout(() => {
-  if (typeof db !== 'undefined' && db.materialMoves && db.fleteros) {
+  if (typeof db !== 'undefined' && db.materialMoves && (db.fleteros || []).length >= 10) {
     let originalLength = db.materialMoves.length;
     db.materialMoves = db.materialMoves.filter(m => {
       return db.fleteros.some(f => f.id === m.fleteroId);
@@ -500,6 +541,65 @@ setTimeout(() => {
     }
   }
 }, 3500);
+
+// Blindaje de auto-reconciliación proactiva: Reconciliar órdenes que tienen salidas confirmadas
+function autoReconcileDispatchedOrders() {
+  if (!db || !db.orders || !db.movements) return;
+  let modified = false;
+  let movesByRef = new Map();
+  (db.movements || []).forEach(m => {
+    if (m.ref && String(m.type || '').includes('Orden') && m.dir === 'out') {
+      if (!movesByRef.has(m.ref)) movesByRef.set(m.ref, []);
+      movesByRef.get(m.ref).push(m);
+    }
+  });
+
+  (db.orders || []).forEach(o => {
+    if (!o || !o.number) return;
+    let moves = movesByRef.get(o.number) || [];
+    let delCount = (o.deliveries || []).length;
+    
+    // Si la orden ya tiene entregas pero status quedó en PENDIENTE o outstanding es 0
+    if (Array.isArray(o.requestLines) && delCount > 0 && o.status === 'PENDIENTE') {
+      let req = o.requestLines.reduce((s, l) => s + Number(l.total || 0), 0);
+      let res = o.requestLines.reduce((s, l) => s + Math.min(Number(l.total || 0), Number(l.resolvedTotal || 0)), 0);
+      if (req - res <= 0) {
+        o.status = 'Despachada';
+        modified = true;
+      }
+    }
+
+    // Si tiene movimientos de salida registrados pero no tiene entregas cargadas
+    if (moves.length > 0 && delCount === 0) {
+      let firstMove = moves[0];
+      let delLines = moves.map(m => ({ productId: m.productId, sourceProductId: m.productId, total: m.total }));
+      o.deliveries = [{
+        id: uid('d'),
+        date: firstMove.date || now(),
+        lines: delLines,
+        result: 'Salida confirmada',
+        note: 'Reconciliación de salida confirmada',
+        user: firstMove.user || 'Encargado',
+        shift: firstMove.shift || 'Mañana'
+      }];
+      if (Array.isArray(o.requestLines)) {
+        let moveQty = {};
+        moves.forEach(m => { moveQty[m.productId] = (moveQty[m.productId] || 0) + m.total; });
+        o.requestLines.forEach(l => {
+          let delivered = moveQty[l.productId] || l.total;
+          l.resolvedTotal = Math.min(Number(l.total || 0), delivered);
+        });
+      }
+      o.status = 'Despachada';
+      modified = true;
+    }
+  });
+
+  if (modified) {
+    safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+  }
+}
+autoReconcileDispatchedOrders();
 
 window.saveFleteros = function() {
   if (typeof lastMasterHashes !== 'undefined') lastMasterHashes.fleteros = '';

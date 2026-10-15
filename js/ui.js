@@ -42,16 +42,32 @@ function renderAll(){
  let today=new Date().toISOString().slice(0,10);
  
  let kO = document.getElementById('kOpen');
- if(kO) kO.textContent=(db.orders||[]).filter(o=>o.pendingType==='administrative'||(v13IsOperational(o.pendingType)&&v11OrderOutstanding(o)>0)).length;
+ if(kO) kO.textContent=(db.orders||[]).filter(o=>{
+   if (o.status === 'Despachada' || o.status === 'Completa' || o.status === 'Anulada') return false;
+   if (typeof v11OrderStatus === 'function') {
+     let st = v11OrderStatus(o);
+     if (st === 'Despachada' || st === 'Anulada') return false;
+   }
+   if (typeof v11OrderOutstanding === 'function' && v11OrderOutstanding(o) === 0) return false;
+   return o.pendingType === 'administrative' || (v13IsOperational(o.pendingType) && v11OrderOutstanding(o) > 0);
+ }).length;
  
  let kD = document.getElementById('kDeliveries');
- if(kD) kD.textContent=(db.orders||[]).flatMap(o=>o.deliveries||[]).filter(d=>d.date.slice(0,10)===today).length;
+ if(kD) kD.textContent=(db.orders||[]).flatMap(o=>o.deliveries||[]).filter(d=>(d.date||'').slice(0,10)===today).length;
  
  let kA = document.getElementById('kAlerts');
- if(kA) kA.textContent=(db.movements||[]).filter(m=>m.note&&m.date.slice(0,10)===today).length;
+ if(kA) kA.textContent=(db.movements||[]).filter(m=>m.note&&(m.date||'').slice(0,10)===today).length;
  
  let kB = document.getElementById('kBilling');
- if(kB) kB.textContent=(db.orders||[]).filter(o=>o.pendingType==='administrative').length;
+ if(kB) kB.textContent=(db.orders||[]).filter(o=>{
+   if (o.status === 'Despachada' || o.status === 'Completa' || o.status === 'Anulada') return false;
+   if (typeof v11OrderStatus === 'function') {
+     let st = v11OrderStatus(o);
+     if (st === 'Despachada' || st === 'Anulada') return false;
+   }
+   if (typeof v11OrderOutstanding === 'function' && v11OrderOutstanding(o) === 0) return false;
+   return o.pendingType === 'administrative';
+ }).length;
  
  if(typeof renderRecentV11 === 'function') renderRecentV11();
  if(typeof v14RenderProductConfig === 'function') v14RenderProductConfig();
@@ -1835,7 +1851,7 @@ openPendingDispatchV11=function(o){
 
 
 // ===== Talca Expedición v1.6 =====
-const V16_SCHEMA_VERSION=7;
+var V16_SCHEMA_VERSION = 7;
 let currentPrintKind='report';
 let v16LastReceipt=null;
 
