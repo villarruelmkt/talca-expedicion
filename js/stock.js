@@ -207,8 +207,8 @@ function exportAuditCSV(){downloadCSV('auditoria.csv',[['Fecha','Usuario','Acci�
 window.openStockAuditModal = function() {
   if (!db || !db.stock || !db.movements) return toast('Datos no cargados.', 'error');
   
-  const baseline = typeof VERIFIED_STOCK_OCT13_2000 !== 'undefined' ? VERIFIED_STOCK_OCT13_2000 : {};
-  const BASE_DATE_ISO = '2026-10-13T20:00:00.000Z';
+  const baseline = typeof VERIFIED_STOCK_OCT16_1300 !== 'undefined' ? VERIFIED_STOCK_OCT16_1300 : {};
+  const BASE_DATE_ISO = '2026-10-16T16:14:00.000Z';
   
   let netMoves = {};
   (db.products || []).forEach(p => { netMoves[p.id] = 0; });
@@ -277,7 +277,7 @@ window.openStockAuditModal = function() {
     </table>
   </div>
   <div class="right" style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-    <div style="font-size: 12px; color: var(--muted);">Base de referencia: 13/10/2026 20:00 hs.</div>
+    <div style="font-size: 12px; color: var(--muted);">Base de referencia: 16/10/2026 13:14 hs.</div>
     <div style="display: flex; gap: 8px;">
       <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
       <button class="btn btn-primary" onclick="executeStockAlignment()" ${discrepanciesCount === 0 ? 'disabled' : ''}>Alinear Stock con Movimientos</button>
@@ -292,8 +292,8 @@ window.executeStockAlignment = function() {
     return alert('Acceso denegado: Tu usuario está en modo SOLO LECTURA.');
   }
   customConfirm('¿Confirma que desea ajustar el stock del sistema al saldo exacto calculado por los movimientos registrados? Esto resolverá cualquier desfasaje por concurrencia.', () => {
-    const baseline = typeof VERIFIED_STOCK_OCT13_2000 !== 'undefined' ? VERIFIED_STOCK_OCT13_2000 : {};
-    const BASE_DATE_ISO = '2026-10-13T20:00:00.000Z';
+    const baseline = typeof VERIFIED_STOCK_OCT16_1300 !== 'undefined' ? VERIFIED_STOCK_OCT16_1300 : {};
+    const BASE_DATE_ISO = '2026-10-16T16:14:00.000Z';
     
     let netMoves = {};
     (db.products || []).forEach(p => { netMoves[p.id] = 0; });

@@ -3,21 +3,38 @@ var V16_SCHEMA_VERSION = 7;
 var session = safeJSON(safeGet(sessionStorage, 'talcaSession'), null);
 let db=load();
 
-// --- DEFINICIONES DE STOCK REAL VERIFICADO AL 13 DE OCTUBRE (CIERRE 20:00 - AJUSTE ÓRDENES) ---
-const VERIFIED_STOCK_OCT13_2000 = {
-  "5670": 179739, "5675": 53124, "5680": 62617, "5685": 46342, "5690": 42451,
-  "5051": 19626,  "5056": 12969, "5061": 26419, "5066": 13184, "5071": 11482,
-  "8670": 20414,  "4900": 79208, "4910": 26934,
-  "5200": 3614,   "5205": 3396,  "5210": 0,     "5215": 2046,  "5220": 1902,
-  "8687": 1262,   "8680": 66954, "417": 10019
+// --- DEFINICIONES DE STOCK REAL VERIFICADO AL 16 DE OCTUBRE (CIERRE 13:14) ---
+const VERIFIED_STOCK_OCT16_1300 = {
+  "417": 8466,
+  "4900": 63780,
+  "4910": 35,
+  "5051": 21949,
+  "5056": 15108,
+  "5061": 25770,
+  "5066": 12389,
+  "5071": 13549,
+  "5200": 6193,
+  "5205": 4735,
+  "5210": 0,
+  "5215": 1968,
+  "5220": 3690,
+  "5670": 216048,
+  "5675": 95004,
+  "5680": 112314,
+  "5685": 41616,
+  "5690": 38016,
+  "8670": 15900,
+  "8680": 64309,
+  "8687": 2423
 };
+const STOCK_BASELINE_DATE = '2026-10-16T16:14:00.000Z';
 const CORRECT_PRODUCT_PACKS = {
   "5051": 12, "5056": 12, "5061": 12, "5066": 12, "5071": 12,
   "8680": 12, "417": 12, "8687": 1
 };
 const OBSOLETE_PRODUCT_IDS = ['4171', 'BIDON'];
 
-function applyVerifiedStockV27() {
+function applyVerifiedStockV38() {
   if (!db) return;
   db.products = (db.products || []).filter(p => !OBSOLETE_PRODUCT_IDS.includes(p.id));
   OBSOLETE_PRODUCT_IDS.forEach(id => {
@@ -27,21 +44,26 @@ function applyVerifiedStockV27() {
   (db.products || []).forEach(p => {
     if (CORRECT_PRODUCT_PACKS[p.id]) p.pack = CORRECT_PRODUCT_PACKS[p.id];
   });
-  if (localStorage.getItem('talca_stock_verified_v27') !== '1') {
-    db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+  if (localStorage.getItem('talca_stock_verified_v38') !== '1') {
+    db.stock = Object.assign({}, VERIFIED_STOCK_OCT16_1300);
     OBSOLETE_PRODUCT_IDS.forEach(id => {
       delete db.stock[id];
       if (db.stockBuckets) delete db.stockBuckets[id];
     });
+    (db.products || []).forEach(p => {
+      if (typeof v1EnsureBucket === 'function') {
+        v1EnsureBucket(p.id).physical = db.stock[p.id] || 0;
+      }
+    });
     safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
-    safeSet(localStorage, 'talca_stock_verified_v27', '1');
+    safeSet(localStorage, 'talca_stock_verified_v38', '1');
   }
 }
-applyVerifiedStockV27();
+applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 37;
+const APP_BUILD_VERSION = 38;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -142,9 +164,16 @@ docRef.onSnapshot((doc) => {
     // Blindaje de integridad: detectar si la nube tuviese stock degradado o arcaico
     let isCloudCorrupted = !cloudDb.stock || !cloudDb.stock['5670'] || Number(cloudDb.stock['5670']) < 100000 || cloudDb.stock['4171'] !== undefined || cloudDb.stock['BIDON'] !== undefined;
     
-    if (isCloudCorrupted) {
+    if (cloudDb.appVersion && cloudDb.appVersion < 38) {
+      console.warn('Nube tiene versión previa a v38. Preservando stock verificado al 16-Oct.');
+      db.stock = Object.assign({}, VERIFIED_STOCK_OCT16_1300);
+      OBSOLETE_PRODUCT_IDS.forEach(id => {
+        delete db.stock[id];
+        if (db.stockBuckets) delete db.stockBuckets[id];
+      });
+    } else if (isCloudCorrupted) {
       console.warn('Blindaje: Se detectó stock degradado/obsoleto en Firestore. Sobreescribiendo con verificado...');
-      db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT13_2000);
+      db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT16_1300);
       OBSOLETE_PRODUCT_IDS.forEach(id => {
         delete db.stock[id];
         if (db.stockBuckets) delete db.stockBuckets[id];
