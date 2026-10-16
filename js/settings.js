@@ -1,4 +1,7 @@
 function addUser(){
+    if (typeof isAuthorizedWriter === 'function' && !isAuthorizedWriter(session)) {
+        return alert('Acceso denegado: Tu usuario está en modo SOLO LECTURA.');
+    }
     let html = `
     <div class="headrow">
         <div><h2>Agregar Usuario</h2></div>
@@ -8,6 +11,9 @@ function addUser(){
         <div><label>Nombre visible del encargado:</label><input id="i_dn" class="field"></div>
         <div><label>Nombre de usuario:</label><input id="i_un" class="field"></div>
         <div><label>Clave inicial:</label><input id="i_pw" class="field"></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px;padding:8px;background:var(--soft);border-radius:4px;grid-column:1/-1;">
+            <b>Perfil de Acceso:</b> Solo Lectura.<br>Por política de seguridad operativa, solo Andrés Guaymas, Raúl Araoz y Pablo Villarruel cuentan con permisos de edición y despacho.
+        </div>
     </div>
     <div class="right" style="margin-top: 24px;">
         <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
@@ -23,12 +29,16 @@ function addUser(){
         if(db.users.some(u => u.username.toLowerCase() === un.toLowerCase())) return toast('Ese usuario ya existe.', 'error');
         db.users.push({id:uid('u'),displayName:dn,username:un,password:pw,active:true});
         audit('Alta','Usuario',un,dn);
-        save(); fillLoginUsers(); closeModal(); toast('Usuario agregado');
+        save(); fillLoginUsers(); closeModal(); toast('Usuario agregado (Solo Lectura)');
     };
 }
 
 function editUser(id){
+    if (typeof isAuthorizedWriter === 'function' && !isAuthorizedWriter(session)) {
+        return alert('Acceso denegado: Tu usuario está en modo SOLO LECTURA.');
+    }
     let u = db.users.find(x=>x.id===id); if(!u) return;
+    let isFull = typeof isAuthorizedWriter === 'function' ? isAuthorizedWriter(u) : false;
     let html = `
     <div class="headrow">
         <div><h2>Editar Usuario</h2></div>
@@ -38,6 +48,9 @@ function editUser(id){
         <div><label>Nombre visible:</label><input id="i_dn" class="field" value="${u.displayName}"></div>
         <div><label>Usuario:</label><input id="i_un" class="field" value="${u.username}"></div>
         <div><label>Clave:</label><input id="i_pw" class="field" value="${u.password}"></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px;padding:8px;background:var(--soft);border-radius:4px;grid-column:1/-1;">
+            <b>Perfil de Acceso:</b> ${isFull ? '<span style="color:#10b981;font-weight:bold;">Acceso Total (Edición)</span>' : '<span style="color:#f59e0b;font-weight:bold;">Solo Lectura</span>'}
+        </div>
     </div>
     <div class="right" style="margin-top: 24px;">
         <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>

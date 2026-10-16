@@ -1,5 +1,29 @@
 
-function addStockMove({type,ref,productId,total,dir,note='',date=null}){db.stock[productId]=(db.stock[productId]||0)+(dir==='in'?total:-total);db.movements.push({id:uid('m'),date:date||now(),type,ref,productId,total,dir,note,user:session.user,shift:session.shift});let p=db.products.find(x=>x.id===productId);audit('Movimiento',type,ref,`${p?p.name:productId} ${dir==='in'?'+':'-'} ${p?equivalent(total,p):total}`);if(typeof v1EnsureBucket==='function'){v1EnsureBucket(productId).physical=db.stock[productId]||0;}}
+function addStockMove({type,ref,productId,total,dir,note='',date=null}){
+  let delta = dir === 'in' ? Number(total) : -Number(total);
+  db.stock[productId] = (Number(db.stock[productId]) || 0) + delta;
+  db.movements.push({id:uid('m'),date:date||now(),type,ref,productId,total:Number(total),dir,note,user:session.user,shift:session.shift});
+  let p = db.products.find(x => x.id === productId);
+  audit('Movimiento', type, ref, `${p ? p.name : productId} ${dir === 'in' ? '+' : '-'} ${p ? equivalent(total, p) : total}`);
+  if (typeof v1EnsureBucket === 'function') {
+    v1EnsureBucket(productId).physical = db.stock[productId] || 0;
+  }
+
+  // Actualización atómica en Firestore a nivel de campo para evitar sobreescrituras concurrentes
+  if (typeof isFirebaseReady !== 'undefined' && isFirebaseReady && typeof docRef !== 'undefined' && docRef && typeof firebase !== 'undefined' && firebase.firestore?.FieldValue?.increment) {
+    try {
+      let updateAtomic = {};
+      updateAtomic[`stock.${productId}`] = firebase.firestore.FieldValue.increment(delta);
+      updateAtomic.updatedAt = new Date().toISOString();
+      updateAtomic.lastSavedBy = (session && session.user && (session.user.displayName || session.user.username || session.user.email)) || (typeof session?.user === 'string' ? session.user : 'Desconocido');
+      docRef.update(updateAtomic).catch(err => {
+        console.warn('Actualización atómica diferida (se consolidará en save):', err);
+      });
+    } catch(e) {
+      console.warn('Error en FieldValue.increment:', e);
+    }
+  }
+}
 function addMaterialMove({fleteroId,ref,source,palletOut=0,palletIn=0,chapOut=0,chapIn=0,date=null}){db.materialMoves.push({id:uid('mat'),date:date||now(),fleteroId,ref,source,palletOut:+palletOut||0,palletIn:+palletIn||0,chapOut:+chapOut||0,chapIn:+chapIn||0,user:session.user,shift:session.shift})}
 
 function openMovement(type){
@@ -178,4 +202,126 @@ function exportPendingCSV(){
  db.orders.filter(o=>o.status==='Parcial'||o.status==='Completa con cambio').forEach(o=>rows.push([o.number,o.date,db.fleteros.find(f=>f.id===o.fleteroId)?.name||'', '',o.status,o.billing]));
  downloadCSV('pendientes.csv',rows)
 }
-function exportAuditCSV(){downloadCSV('auditoria.csv',[['Fecha','Usuario','Acción','Entidad','Referencia','Detalle'],...(db.audit||[]).map(a=>[fmtDate(a.date),a.user,a.action,a.entity,a.ref,a.detail])])}
+function exportAuditCSV(){downloadCSV('auditoria.csv',[['Fecha','Usuario','Acción','Entidad','Referencia','Detalle'],...(db.audit||[]).map(a=>[fmtDate(a.date),a.user,a.action,a.entity,a.ref,a.detail])])}
+
+window.openStockAuditModal = function() {
+  if (!db || !db.stock || !db.movements) return toast('Datos no cargados.', 'error');
+  
+  const baseline = typeof VERIFIED_STOCK_OCT13_2000 !== 'undefined' ? VERIFIED_STOCK_OCT13_2000 : {};
+  const BASE_DATE_ISO = '2026-10-13T20:00:00.000Z';
+  
+  let netMoves = {};
+  (db.products || []).forEach(p => { netMoves[p.id] = 0; });
+
+  (db.movements || []).forEach(m => {
+    if (!m || m._deleted || !m.productId) return;
+    if (m.date && m.date > BASE_DATE_ISO) {
+      let delta = m.dir === 'in' ? Number(m.total || 0) : -Number(m.total || 0);
+      netMoves[m.productId] = (netMoves[m.productId] || 0) + delta;
+    }
+  });
+
+  let rows = (db.products || []).filter(p => typeof OBSOLETE_PRODUCT_IDS !== 'undefined' ? !OBSOLETE_PRODUCT_IDS.includes(p.id) : true).map(p => {
+    let base = baseline[p.id] || 0;
+    let net = netMoves[p.id] || 0;
+    let calculated = base + net;
+    let current = Number(db.stock[p.id] || 0);
+    let diff = current - calculated;
+    return { p, base, net, calculated, current, diff };
+  });
+
+  let discrepanciesCount = rows.filter(r => r.diff !== 0).length;
+
+  let html = `
+  <div class="headrow">
+    <div>
+      <h2>Auditoría y Calibración de Stock</h2>
+      <div class="muted">Compara el saldo físico del sistema con la suma de la base verificada y los movimientos registrados.</div>
+    </div>
+    <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
+  </div>
+  <div style="margin: 12px 0; padding: 10px; background: ${discrepanciesCount ? '#fef3c7' : '#ecfdf5'}; border-radius: 6px; font-size: 13px; color: #1e293b;">
+    ${discrepanciesCount 
+      ? `<b>Atención:</b> Se detectaron <b>${discrepanciesCount}</b> productos con desfasaje entre el stock actual y los movimientos registrados.` 
+      : '<b>Excelente:</b> El stock actual del sistema coincide al 100% con los movimientos registrados.'}
+  </div>
+  <div class="tablewrap" style="max-height: 380px; overflow-y: auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Producto</th>
+          <th style="text-align:right">Stock Actual</th>
+          <th style="text-align:right">Base + Movs</th>
+          <th style="text-align:right">Diferencia</th>
+          <th style="text-align:center">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => {
+          let diffText = r.diff === 0 ? '0' : (r.diff > 0 ? `+${r.diff}` : `${r.diff}`);
+          let diffColor = r.diff === 0 ? '#10b981' : (r.diff > 0 ? '#d97706' : '#ef4444');
+          let statusChip = r.diff === 0 
+            ? '<span class="status done">Correcto</span>' 
+            : `<span class="status danger">${r.diff > 0 ? 'Excedente' : 'Faltante'}</span>`;
+          return `<tr>
+            <td><b>${r.p.id}</b></td>
+            <td>${r.p.name}</td>
+            <td style="text-align:right; font-weight:bold;">${equivalent(r.current, r.p)}</td>
+            <td style="text-align:right;">${equivalent(r.calculated, r.p)}</td>
+            <td style="text-align:right; color:${diffColor}; font-weight:bold;">${diffText} un.</td>
+            <td style="text-align:center;">${statusChip}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <div class="right" style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+    <div style="font-size: 12px; color: var(--muted);">Base de referencia: 13/10/2026 20:00 hs.</div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
+      <button class="btn btn-primary" onclick="executeStockAlignment()" ${discrepanciesCount === 0 ? 'disabled' : ''}>Alinear Stock con Movimientos</button>
+    </div>
+  </div>`;
+
+  modal(html);
+};
+
+window.executeStockAlignment = function() {
+  if (typeof isAuthorizedWriter === 'function' && !isAuthorizedWriter(session)) {
+    return alert('Acceso denegado: Tu usuario está en modo SOLO LECTURA.');
+  }
+  customConfirm('¿Confirma que desea ajustar el stock del sistema al saldo exacto calculado por los movimientos registrados? Esto resolverá cualquier desfasaje por concurrencia.', () => {
+    const baseline = typeof VERIFIED_STOCK_OCT13_2000 !== 'undefined' ? VERIFIED_STOCK_OCT13_2000 : {};
+    const BASE_DATE_ISO = '2026-10-13T20:00:00.000Z';
+    
+    let netMoves = {};
+    (db.products || []).forEach(p => { netMoves[p.id] = 0; });
+
+    (db.movements || []).forEach(m => {
+      if (!m || m._deleted || !m.productId) return;
+      if (m.date && m.date > BASE_DATE_ISO) {
+        let delta = m.dir === 'in' ? Number(m.total || 0) : -Number(m.total || 0);
+        netMoves[m.productId] = (netMoves[m.productId] || 0) + delta;
+      }
+    });
+
+    (db.products || []).forEach(p => {
+      if (typeof OBSOLETE_PRODUCT_IDS !== 'undefined' && OBSOLETE_PRODUCT_IDS.includes(p.id)) return;
+      let base = baseline[p.id] || 0;
+      let net = netMoves[p.id] || 0;
+      let correctStock = Math.max(0, base + net);
+      db.stock[p.id] = correctStock;
+      if (typeof v1EnsureBucket === 'function') {
+        v1EnsureBucket(p.id).physical = correctStock;
+      }
+    });
+
+    audit('Alineación', 'Stock', 'Auto-Reconciliación', 'Calibración automática con suma de movimientos');
+    if (typeof saveStock === 'function') saveStock();
+    else save();
+    closeModal();
+    if (typeof renderStockV1 === 'function') renderStockV1();
+    toast('Stock alineado y sincronizado exitosamente con el registro de movimientos');
+  });
+};

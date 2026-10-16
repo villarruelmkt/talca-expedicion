@@ -41,7 +41,21 @@ applyVerifiedStockV27();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 35;
+const APP_BUILD_VERSION = 36;
+
+function isAuthorizedWriter(userObjOrName) {
+  if (!userObjOrName) return false;
+  let name = '';
+  if (typeof userObjOrName === 'string') name = userObjOrName;
+  else if (typeof userObjOrName === 'object') {
+    name = `${userObjOrName.username || ''} ${userObjOrName.displayName || ''} ${userObjOrName.user || ''}`;
+  }
+  let norm = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return norm.includes('pablo') || norm.includes('villarruel') || norm.includes('pvillarruel') ||
+         norm.includes('raul') || norm.includes('araoz') || norm.includes('raraoz') ||
+         norm.includes('andres') || norm.includes('guaymas') || norm.includes('aguaymas');
+}
+
 let hasInitialCloudSync = false;
 let hasCollectionsInitialSync = {
   orders: false, movements: false, audit: false, materialMoves: false, counts: false
@@ -237,6 +251,17 @@ function setupCollectionListeners() {
              } else {
                 db[col] = db[col]||[];
                 db[col].push(data);
+
+                // Blindaje reactivo de stock en tiempo real:
+                // Si llega un movimiento nuevo de otra máquina, impactar el stock físico local de inmediato
+                if (col === 'movements' && change.type === 'added' && !lastSyncedDb[col].has(data.id) && data.productId && data.total && !data._deleted) {
+                   let delta = data.dir === 'in' ? Number(data.total) : -Number(data.total);
+                   db.stock[data.productId] = (Number(db.stock[data.productId]) || 0) + delta;
+                   if (typeof v1EnsureBucket === 'function') {
+                      v1EnsureBucket(data.productId).physical = db.stock[data.productId];
+                   }
+                   lastMasterHashes.stock = fastHash(db.stock);
+                }
              }
              lastSyncedDb[col].set(data.id, fastHash(data));
              updated = true;
@@ -280,6 +305,13 @@ function save(){
  }
  
  if (isFirebaseReady) {
+   // REGLA DE SEGURIDAD: Solo usuarios autorizados (Andrés, Raúl, Pablo) tienen permisos de escritura en la nube
+   if (!isAuthorizedWriter(session)) {
+     console.warn('Acceso denegado: El usuario activo está en modo SOLO LECTURA. No se suben cambios a Firestore.');
+     try{renderAll()}catch(err){}
+     return;
+   }
+
    // REGLA 3: Bloquear cualquier subida a Firestore si aún no se recibió la sincronización inicial de talca/data
    if (!hasInitialCloudSync) {
      console.warn('Guardado en Firestore en pausa: esperando sincronización inicial desde la nube...');
@@ -342,13 +374,21 @@ function save(){
       lastMasterHashes.fleteros = currentFleterosHash;
     }
 
+    // DESACOPLE CRÍTICO: stock físico y stockBuckets se evalúan por separado.
+    // Si un usuario administrativo solo carga órdenes o modifica reservas, SOLO se envían buckets;
+    // NUNCA se empaqueta ni pisa el stock físico del galpón.
     let currentStockHash = fastHash(db.stock);
-    let currentBucketsHash = fastHash(db.stockBuckets);
-    if (lastMasterHashes.stock !== null && (currentStockHash !== lastMasterHashes.stock || currentBucketsHash !== lastMasterHashes.stockBuckets)) {
+    if (lastMasterHashes.stock !== null && currentStockHash !== lastMasterHashes.stock) {
       if (db.stock && Object.keys(db.stock).length > 0) {
         updatePayload.stock = db.stock;
-        updatePayload.stockBuckets = db.stockBuckets;
         lastMasterHashes.stock = currentStockHash;
+      }
+    }
+
+    let currentBucketsHash = fastHash(db.stockBuckets);
+    if (lastMasterHashes.stockBuckets !== null && currentBucketsHash !== lastMasterHashes.stockBuckets) {
+      if (db.stockBuckets && Object.keys(db.stockBuckets).length > 0) {
+        updatePayload.stockBuckets = db.stockBuckets;
         lastMasterHashes.stockBuckets = currentBucketsHash;
       }
     }
@@ -423,7 +463,17 @@ function changeShift(){
     start();
   };
 }
-function start(){login.classList.add('hidden');app.classList.remove('hidden');sessionBadge.textContent=session.user+' · '+session.shift;todayText.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});renderAll()}
+function start(){
+  login.classList.add('hidden');
+  app.classList.remove('hidden');
+  let isReadOnly = !isAuthorizedWriter(session);
+  let roleBadge = isReadOnly 
+    ? ' <span style="background:#f59e0b;color:#000;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;">SOLO LECTURA</span>'
+    : ' <span style="background:#10b981;color:#fff;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;">ACCESO TOTAL</span>';
+  sessionBadge.innerHTML = session.user + ' · ' + session.shift + roleBadge;
+  todayText.textContent = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  renderAll();
+}
 document.addEventListener('DOMContentLoaded',()=>{
  fillLoginUsers();
  let warning=document.getElementById('mobileFileWarning');
@@ -440,15 +490,37 @@ document.addEventListener('DOMContentLoaded',()=>{
  });
 
  document.addEventListener('click', (e) => {
+   let t = e.target.closest('button, a.btn');
+   if (!t) return;
+
+   if (session && !isAuthorizedWriter(session)) {
+     let text = (t.innerText || t.textContent || '').toLowerCase();
+     let isWhitelisted = text.includes('cerrar') || text.includes('cancelar') || 
+                         text.includes('imprimir') || text.includes('ver') || 
+                         text.includes('exportar') || text.includes('filtro') || 
+                         text.includes('limpiar') || t.classList.contains('navbtn') ||
+                         t.id === 'stockUnitToggle';
+     let isAction = text.includes('guardar') || text.includes('confirmar') || 
+                    text.includes('generar') || text.includes('despachar') || 
+                    text.includes('eliminar') || text.includes('anular') || 
+                    text.includes('agregar') || text.includes('ajuste') ||
+                    text.includes('nueva orden') || text.includes('modificar') ||
+                    text.includes('cambiar turno') || text.includes('calibrar') ||
+                    text.includes('reconciliar');
+     if (isAction && !isWhitelisted) {
+       e.stopPropagation();
+       e.preventDefault();
+       alert('Acceso restringido: Tu usuario está configurado en modo SOLO LECTURA. Solo Andrés Guaymas, Raúl Araoz y Pablo Villarruel tienen permisos de modificación.');
+       return;
+     }
+   }
+
    if (!navigator.onLine) {
-     let t = e.target;
-     if (t.tagName === 'BUTTON') {
-       let text = (t.innerText || t.textContent || '').toLowerCase();
-       if (text.includes('guardar') || text.includes('confirmar') || text.includes('generar') || text.includes('despachar')) {
-         e.stopPropagation();
-         e.preventDefault();
-         alert('Acción bloqueada preventivamente: No tienes conexión a internet. Espera a que desaparezca el cartel rojo para evitar sobreescribir y perder datos de otros usuarios.');
-       }
+     let text = (t.innerText || t.textContent || '').toLowerCase();
+     if (text.includes('guardar') || text.includes('confirmar') || text.includes('generar') || text.includes('despachar')) {
+       e.stopPropagation();
+       e.preventDefault();
+       alert('Acción bloqueada preventivamente: No tienes conexión a internet. Espera a que desaparezca el cartel rojo para evitar sobreescribir y perder datos de otros usuarios.');
      }
    }
  }, true);

@@ -107,7 +107,13 @@ function renderAll(){
 
   try {
     let el = document.getElementById('usersList');
-    if(el) el.innerHTML=(db.users||[]).map(u=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b><br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`).join('');
+    if(el) el.innerHTML=(db.users||[]).map(u=>{
+      let isFull = typeof isAuthorizedWriter === 'function' ? isAuthorizedWriter(u) : false;
+      let roleBadge = isFull 
+        ? '<span style="background:#10b981;color:#fff;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Acceso Total</span>'
+        : '<span style="background:#f59e0b;color:#000;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Solo Lectura</span>';
+      return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b> ${roleBadge}<br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`;
+    }).join('');
   } catch(e) { console.error("renderAll usersList error", e); }
 
   try {
