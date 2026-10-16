@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 38;
+const APP_BUILD_VERSION = 39;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -284,12 +284,14 @@ function setupCollectionListeners() {
                 // Blindaje reactivo de stock en tiempo real:
                 // Si llega un movimiento nuevo de otra máquina, impactar el stock físico local de inmediato
                 if (col === 'movements' && change.type === 'added' && !lastSyncedDb[col].has(data.id) && data.productId && data.total && !data._deleted) {
-                   let delta = data.dir === 'in' ? Number(data.total) : -Number(data.total);
-                   db.stock[data.productId] = (Number(db.stock[data.productId]) || 0) + delta;
-                   if (typeof v1EnsureBucket === 'function') {
-                      v1EnsureBucket(data.productId).physical = db.stock[data.productId];
+                   if (data.date && typeof STOCK_BASELINE_DATE !== 'undefined' && data.date > STOCK_BASELINE_DATE) {
+                      let delta = data.dir === 'in' ? Number(data.total) : -Number(data.total);
+                      db.stock[data.productId] = (Number(db.stock[data.productId]) || 0) + delta;
+                      if (typeof v1EnsureBucket === 'function') {
+                         v1EnsureBucket(data.productId).physical = db.stock[data.productId];
+                      }
+                      lastMasterHashes.stock = fastHash(db.stock);
                    }
-                   lastMasterHashes.stock = fastHash(db.stock);
                 }
              }
              lastSyncedDb[col].set(data.id, fastHash(data));
