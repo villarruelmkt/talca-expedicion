@@ -41,7 +41,7 @@ applyVerifiedStockV27();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 36;
+const APP_BUILD_VERSION = 37;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;

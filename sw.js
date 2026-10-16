@@ -1,4 +1,4 @@
-const CACHE_NAME = 'talca-cache-v36';
+const CACHE_NAME = 'talca-cache-v37';
 const urlsToCache = [
   './',
   './index.html',

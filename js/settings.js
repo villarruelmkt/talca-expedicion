@@ -52,9 +52,12 @@ function editUser(id){
             <b>Perfil de Acceso:</b> ${isFull ? '<span style="color:#10b981;font-weight:bold;">Acceso Total (Edición)</span>' : '<span style="color:#f59e0b;font-weight:bold;">Solo Lectura</span>'}
         </div>
     </div>
-    <div class="right" style="margin-top: 24px;">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-primary" id="btnSave">Guardar</button>
+    <div class="right" style="margin-top: 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div>${!isFull ? `<button type="button" class="btn btn-danger" onclick="closeModal();deleteUserDirect('${u.id}')">Eliminar usuario</button>` : ''}</div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btn-primary" id="btnSave">Guardar</button>
+        </div>
     </div>`;
     modal(html);
     document.getElementById('btnSave').onclick = () => {
@@ -65,6 +68,25 @@ function editUser(id){
         u.displayName=dn; u.username=un; u.password=pw;
         save(); fillLoginUsers(); closeModal(); toast('Usuario editado');
     };
+}
+
+function deleteUserDirect(id){
+    if (typeof isAuthorizedWriter === 'function' && !isAuthorizedWriter(session)) {
+        return alert('Acceso denegado: Tu usuario está en modo SOLO LECTURA.');
+    }
+    let u = db.users.find(x=>x.id===id);
+    if (!u) return;
+    if (typeof isAuthorizedWriter === 'function' && isAuthorizedWriter(u)) {
+        return alert('No se puede eliminar a los administradores principales del sistema.');
+    }
+    customConfirm(`¿Estás seguro de que deseas eliminar al usuario "${u.displayName}" (@${u.username})?`, () => {
+        db.users = (db.users || []).filter(x => x.id !== id);
+        audit('Baja', 'Usuario', u.username, u.displayName);
+        save();
+        fillLoginUsers();
+        renderAll();
+        toast('Usuario eliminado correctamente');
+    });
 }
 
 function addFletero(){

@@ -112,7 +112,18 @@ function renderAll(){
       let roleBadge = isFull 
         ? '<span style="background:#10b981;color:#fff;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Acceso Total</span>'
         : '<span style="background:#f59e0b;color:#000;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Solo Lectura</span>';
-      return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${u.displayName}</b> ${roleBadge}<br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span><div class="right"><button class="btn btn-secondary" onclick="editUser('${u.id}')">Modificar</button></div></div>`;
+      let deleteBtn = !isFull
+        ? `<button class="btn btn-danger" style="padding:4px 8px;font-size:12px;" onclick="deleteUserDirect('${u.id}')">Eliminar</button>`
+        : '';
+      return `<div style="padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <b>${u.displayName}</b> ${roleBadge}<br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="editUser('${u.id}')">Modificar</button>
+          ${deleteBtn}
+        </div>
+      </div>`;
     }).join('');
   } catch(e) { console.error("renderAll usersList error", e); }
 
