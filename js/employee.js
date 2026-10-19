@@ -25,7 +25,7 @@ function selectEmployee(id){
  let receiptArea=document.getElementById('employeeReceiptArea');
  if(receiptArea)receiptArea.classList.add('hidden');
  searchEmployees();
- renderEmployeeWorkbench()
+ renderEmployeeWorkbench(true);
 }
 function employeeMovements(e){
  return [...db.movements].filter(m=>m.type===`Consumo de empleado - ${e.name} ${e.surname}`||m.type===`Anticipo empleado - ${e.name} ${e.surname}`).reverse()
@@ -88,14 +88,14 @@ window.annulEmployeeMove = function(moveId) {
 
     m.annulled = true;
     save();
-    renderEmployeeWorkbench();
+    renderEmployeeWorkbench(true);
     toast('Movimiento anulado correctamente');
   });
 };
 function addWorkbenchAdvanceLine(){
  let box=document.getElementById('wbAdvanceLines');if(!box)return;
  let d=document.createElement('div');d.className='line';
- d.innerHTML=`<div class="prod"><label>Producto</label><select class="wbaProd">${productOptions()}</select></div><div><label>Fardos</label><input class="field wbaPack" type="number" min="0" value="0"></div><div><label>Unidades</label><input class="field wbaUnit" type="number" min="0" value="0"></div><button class="btn btn-danger" onclick="this.parentElement.remove()">Quitar</button>`;
+ d.innerHTML=`<div class="prod"><label>Producto</label><select class="wbaProd">${productOptions()}</select></div><div><label>Fardos</label><input class="field wbaPack" type="number" min="0" value="0"></div><div><label>Unidades</label><input class="field wbaUnit" type="number" min="0" value="0"></div><button type="button" class="btn btn-danger" onclick="this.parentElement.remove()">Quitar</button>`;
  box.appendChild(d)
 }
 function saveWorkbenchConsumption(){

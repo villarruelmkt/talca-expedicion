@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 42;
+const APP_BUILD_VERSION = 43;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -579,9 +579,18 @@ function now(){return new Date().toISOString()}
 function fmtDate(x){if(typeof x==='string'&&x.length===10&&x.indexOf('-')===4){let [y,m,d]=x.split('-');return `${d}/${m}/${y}`}return new Date(x).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}
 function uid(p='id'){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function fillLoginUsers(){
- let select=document.getElementById('loginUser');if(!select)return;
- let users=(db.users&&db.users.length?db.users:[]).filter(u=>u.active!==false);
- if(users.length)select.innerHTML=users.map(u=>`<option value="${u.id}">${u.displayName} (${u.username})</option>`).join('');
+  let select = document.getElementById('loginUser');
+  if (!select) return;
+  let currentVal = select.value;
+  let users = (db.users && db.users.length ? db.users : []).filter(u => u.active !== false);
+  if (!users.length) return;
+  let newHtml = users.map(u => `<option value="${u.id}">${u.displayName} (${u.username})</option>`).join('');
+  if (select.innerHTML !== newHtml) {
+    select.innerHTML = newHtml;
+    if (currentVal && users.some(u => u.id === currentVal)) {
+      select.value = currentVal;
+    }
+  }
 }
 function doLogin(){
  let userEl=document.getElementById('loginUser');

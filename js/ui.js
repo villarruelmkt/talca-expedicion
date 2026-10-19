@@ -38,7 +38,7 @@ function customConfirm(msg, onConfirm) {
 
 function renderAll(){
  if(!session)return;
- populateFilters();if(document.getElementById('employeeSearchResults')){searchEmployees();if(selectedEmployeeId)renderEmployeeWorkbench();}
+ populateFilters();if(document.getElementById('employeeSearchResults')){searchEmployees();if(selectedEmployeeId)renderEmployeeWorkbench(false);}
  let today=new Date().toISOString().slice(0,10);
  
  let kO = document.getElementById('kOpen');
@@ -567,19 +567,51 @@ function employeeHistoryGroupsV12(e){
   return [...groups.values()];
 }
 
-renderEmployeeWorkbench=function(){
+renderEmployeeWorkbench=function(fullReset = false){
   let workbench=document.getElementById('employeeWorkbench');
+  if(!workbench)return;
   let e=db.employees.find(x=>x.id===selectedEmployeeId);
   if(!e){
+    workbench.dataset.employeeId='';
     workbench.innerHTML='<div class="card"><span class="muted">Seleccione un empleado.</span></div>';
     return;
   }
+
+  let isSameEmployee = workbench.dataset.employeeId === e.id;
+  let hasLinesRendered = Boolean(document.getElementById('wbConsumptionLines') && document.getElementById('wbAdvanceLines'));
+
+  // Si es el mismo empleado y no se pidió reset forzado, actualizar solo saldo e historial
+  // para NO borrar las líneas de productos que el usuario esté agregando o editando.
+  if (isSameEmployee && hasLinesRendered && !fullReset) {
+    let balanceEl = workbench.querySelector('.employee-balance-val');
+    if (balanceEl) balanceEl.textContent = `${e.balance || 0} fardos`;
+
+    let historyEl = workbench.querySelector('.mini-history');
+    if (historyEl) {
+      let history = employeeHistoryGroupsV12(e);
+      historyEl.innerHTML = history.length
+        ? history.slice(0, 20).map(g => {
+            let isAnnulled = g.movements.every(m => m.annulled);
+            let detail = g.movements.map(m => {
+              let p = db.products.find(x => x.id === m.productId);
+              return `${p?.name || m.productId}: ${p ? equivalent(m.total, p) : m.total}`;
+            }).join(' · ');
+            let annulBtn = !isAnnulled ? `<br><button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:12px;margin-top:4px" onclick='annulEmployeeMoveGroup(${JSON.stringify(g.movements.map(m => m.id))})'>Anular</button>` : '';
+            return `<div class="history-operation" style="padding:9px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;"><div><b>${g.type}</b>${g.receiptNumber ? ` · ${g.receiptNumber}` : ''}<br>${detail}<br><span class="muted">${fmtDate(g.date)} · ${g.user} · Turno ${g.shift}${isAnnulled ? ' <b class="danger">ANULADO</b>' : ''}</span></div>${annulBtn}</div>`;
+          }).join('')
+        : '<span class="muted">Todavía no registra consumos ni anticipos.</span>';
+    }
+    updateWorkbenchConsumptionSummary();
+    return;
+  }
+
+  workbench.dataset.employeeId = e.id;
   let history=employeeHistoryGroupsV12(e);
   workbench.innerHTML=`
   <div class="card employee-profile">
     <div class="headrow">
       <div><h2>${e.name} ${e.surname}</h2><div class="muted">Legajo ${e.legajo} · ${e.active?'Activo':'Inactivo'}</div></div>
-      <div><span class="muted">Saldo beneficio</span><div style="font-size:30px;font-weight:800">${e.balance||0} fardos</div></div>
+      <div><span class="muted">Saldo beneficio</span><div class="employee-balance-val" style="font-size:30px;font-weight:800">${e.balance||0} fardos</div></div>
     </div>
   </div>
 
@@ -591,15 +623,15 @@ renderEmployeeWorkbench=function(){
       </div>
       <div id="wbConsumptionLines" class="consumption-lines"></div>
       <div id="wbConsumptionSummary" class="consumption-summary"></div>
-      <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="saveWorkbenchConsumption()">Confirmar y generar comprobantes</button>
+      <button type="button" class="btn btn-primary" style="width:100%;margin-top:14px" onclick="saveWorkbenchConsumption()">Confirmar y generar comprobantes</button>
     </div>
 
     <div class="card">
-      <div class="headrow"><h3>Anticipo empleado</h3><button class="btn btn-secondary" onclick="addWorkbenchAdvanceLine()">Agregar producto</button></div>
+      <div class="headrow"><h3>Anticipo empleado</h3><button type="button" class="btn btn-secondary" onclick="addWorkbenchAdvanceLine()">Agregar producto</button></div>
       <p class="muted">Compra de mercadería. Afecta el stock, pero no el saldo del beneficio.</p>
       <div id="wbAdvanceLines"></div>
       <label>Observaciones</label><input id="wbAdvanceNote" class="field">
-      <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="saveWorkbenchAdvance()">Confirmar y generar comprobantes</button>
+      <button type="button" class="btn btn-primary" style="width:100%;margin-top:14px" onclick="saveWorkbenchAdvance()">Confirmar y generar comprobantes</button>
     </div>
   </div>
 
@@ -613,7 +645,7 @@ renderEmployeeWorkbench=function(){
           let p=db.products.find(x=>x.id===m.productId);
           return `${p?.name||m.productId}: ${p?equivalent(m.total,p):m.total}`;
         }).join(' · ');
-        let annulBtn = !isAnnulled ? `<br><button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;margin-top:4px" onclick='annulEmployeeMoveGroup(${JSON.stringify(g.movements.map(m=>m.id))})'>Anular</button>` : '';
+        let annulBtn = !isAnnulled ? `<br><button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:12px;margin-top:4px" onclick='annulEmployeeMoveGroup(${JSON.stringify(g.movements.map(m=>m.id))})'>Anular</button>` : '';
         return `<div class="history-operation" style="padding:9px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;"><div><b>${g.type}</b>${g.receiptNumber?` · ${g.receiptNumber}`:''}<br>${detail}<br><span class="muted">${fmtDate(g.date)} · ${g.user} · Turno ${g.shift}${isAnnulled?' <b class="danger">ANULADO</b>':''}</span></div>${annulBtn}</div>`;
       }).join('')
       :'<span class="muted">Todavía no registra consumos ni anticipos.</span>'
@@ -651,7 +683,7 @@ window.annulEmployeeMoveGroup = function(moveIds) {
       m.annulled = true;
     });
     save();
-    renderEmployeeWorkbench();
+    renderEmployeeWorkbench(true);
     toast('Operación anulada correctamente');
   });
 };
@@ -728,12 +760,12 @@ saveWorkbenchConsumption=function(){
   e.balance=Number(e.balance||0)-totalPacks;
   e.lastConsumption=operationDate;
   save();
-  renderEmployeeWorkbench();
+  renderEmployeeWorkbench(true);
   showEmployeeReceipt(e,items,'CONSUMO DE EMPLEADO','CE',receiptNumber);
 };
 
 // Refresh the selected employee if the screen was already open during an update.
-if(selectedEmployeeId&&document.getElementById('employeeWorkbench'))renderEmployeeWorkbench();
+if(selectedEmployeeId&&document.getElementById('employeeWorkbench'))renderEmployeeWorkbench(false);
 
 
 // ===== Talca Expedición v1.3: fleteros rápidos, edición y PENDIENTE administrativo =====
@@ -2024,7 +2056,7 @@ saveWorkbenchAdvance=function(){
     movement.operationDate=operationDate;
   });
   save();
-  renderEmployeeWorkbench();
+  renderEmployeeWorkbench(true);
   showEmployeeReceipt(e,items,'ANTICIPO EMPLEADO','AE',receiptNumber);
 };
 
