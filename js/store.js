@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 40;
+const APP_BUILD_VERSION = 41;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -161,25 +161,40 @@ docRef.onSnapshot((doc) => {
     // REGLA 1 & 3: Registro de sincronización inicial y timestamp de la nube
     hasInitialCloudSync = true;
     lastCloudUpdatedAt = cloudDb.updatedAt || null;
-    // Blindaje de integridad: detectar si la nube tuviese stock degradado o arcaico
-    let isCloudCorrupted = !cloudDb.stock || !cloudDb.stock['5670'] || Number(cloudDb.stock['5670']) < 100000 || cloudDb.stock['4171'] !== undefined || cloudDb.stock['BIDON'] !== undefined;
-    
-    if (cloudDb.appVersion && cloudDb.appVersion < 38) {
-      console.warn('Nube tiene versión previa a v38. Preservando stock verificado al 16-Oct.');
-      db.stock = Object.assign({}, VERIFIED_STOCK_OCT16_1300);
+
+    let isFromCache = Boolean(doc.metadata && doc.metadata.fromCache);
+    let cloudStock5670 = Number(cloudDb.stock && cloudDb.stock['5670'] || 0);
+
+    // Blindaje de integridad: detectar si la nube tuviese stock desactualizado, pre-16 de Octubre o degradado
+    let isPreOct16Stock = !cloudDb.stock || cloudStock5670 < 200000 || cloudDb.stock['4171'] !== undefined || cloudDb.stock['BIDON'] !== undefined;
+
+    if (isPreOct16Stock) {
+      console.warn('Blindaje: Stock en Firestore es anterior a la base verificada del 16-Oct. Reconciliando con base + movimientos posteriores...');
+      let reconciledStock = Object.assign({}, VERIFIED_STOCK_OCT16_1300);
       OBSOLETE_PRODUCT_IDS.forEach(id => {
-        delete db.stock[id];
+        delete reconciledStock[id];
         if (db.stockBuckets) delete db.stockBuckets[id];
       });
-    } else if (isCloudCorrupted) {
-      console.warn('Blindaje: Se detectó stock degradado/obsoleto en Firestore. Sobreescribiendo con verificado...');
-      db.stock = Object.assign({}, db.stock || {}, VERIFIED_STOCK_OCT16_1300);
-      OBSOLETE_PRODUCT_IDS.forEach(id => {
-        delete db.stock[id];
-        if (db.stockBuckets) delete db.stockBuckets[id];
+      (db.movements || []).forEach(m => {
+        if (m.date && m.date > STOCK_BASELINE_DATE && m.productId && !m._deleted) {
+          let delta = m.dir === 'in' ? Number(m.total || 0) : -Number(m.total || 0);
+          reconciledStock[m.productId] = (Number(reconciledStock[m.productId]) || 0) + delta;
+        }
       });
-      save();
+      db.stock = reconciledStock;
+      if (!isFromCache && typeof isAuthorizedWriter === 'function' && isAuthorizedWriter(session) && typeof saveStock === 'function') {
+        saveStock();
+      }
+    } else if (isFromCache) {
+      // Si la respuesta viene de la caché offline de IndexedDB (por cuota 429 o desconexión),
+      // preservar el stock local si ya contiene datos consistentes para no pisarlo con caché congelada
+      if (!db.stock || Object.keys(db.stock).length === 0) {
+        db.stock = cloudDb.stock;
+      } else {
+        console.warn('Blindaje de red: Firestore en caché offline (429/sin red). Se preserva el stock local verificado.');
+      }
     } else {
+      // Stock fresco confirmado por el servidor de Firestore
       db.stock = cloudDb.stock;
       OBSOLETE_PRODUCT_IDS.forEach(id => {
         if (db.stock && db.stock[id] !== undefined) delete db.stock[id];
@@ -306,6 +321,10 @@ function setupCollectionListeners() {
        });
        if (updated) {
           if(col !== 'orders') db[col].sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
+          if (col === 'orders' || col === 'movements') {
+             if (typeof autoReconcileDispatchedOrders === 'function') autoReconcileDispatchedOrders();
+             if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
+          }
           safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
           try{renderAll()}catch(e){}
        }
