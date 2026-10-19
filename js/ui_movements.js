@@ -35,7 +35,7 @@ function v16GroupedMovements(){
   });
 
   output.push(...map.values());
-  return output.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  return output.sort((a,b)=>(b.date||'') > (a.date||'') ? 1 : ((b.date||'') < (a.date||'') ? -1 : 0));
 }
 
 function renderEditMovementBtn(g) {
@@ -62,7 +62,14 @@ function renderMovementsV16(){
     list = list.filter(g => g.type === t);
   }
 
-  body.innerHTML=list.map(g=>`<tr>
+  let totalCount = list.length;
+  let isCapped = false;
+  if (!fromD && !toD && !t && list.length > 200) {
+    list = list.slice(0, 200);
+    isCapped = true;
+  }
+
+  let rowsHtml = list.map(g=>`<tr>
     <td>${fmtDate(g.date)}</td>
     <td>${v14Text(g.type)}${g.count>1?`<span class="v16-group-badge">${g.count} productos</span>`:''}</td>
     <td>${v14Text(g.ref||'')}</td>
@@ -72,7 +79,13 @@ function renderMovementsV16(){
     <td>${v14Text(g.user||'')}</td>
     <td>${v14Text(g.shift||'')}</td>
     ${renderEditMovementBtn(g)}
-  </tr>`).join('')||'<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
+  </tr>`).join('');
+
+  if (isCapped) {
+    rowsHtml += `<tr><td colspan="9" style="text-align:center;background:var(--card);color:var(--muted);padding:10px;font-size:13px;font-weight:bold;">Mostrando los 200 movimientos más recientes de ${totalCount}. Utilice los filtros 'Desde', 'Hasta' o 'Tipo' para ver operaciones anteriores.</td></tr>`;
+  }
+
+  body.innerHTML = rowsHtml || '<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
 }
 
 window.clearMovFilters = function() {

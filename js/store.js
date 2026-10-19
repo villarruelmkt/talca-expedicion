@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 43;
+const APP_BUILD_VERSION = 44;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -287,6 +287,18 @@ function setupCollectionListeners() {
     { col: 'counts', query: firestoreDb.collection('counts').where('date', '>=', cutoff30d) }
   ];
 
+  let syncBatchTimer = null;
+  function scheduleSyncBatch() {
+    if (syncBatchTimer) clearTimeout(syncBatchTimer);
+    syncBatchTimer = setTimeout(() => {
+      syncBatchTimer = null;
+      if (typeof autoReconcileDispatchedOrders === 'function') autoReconcileDispatchedOrders();
+      if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
+      safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+      try { renderAll(); } catch(e){}
+    }, 120);
+  }
+
   configs.forEach(({ col, query }) => {
     query.onSnapshot(snap => {
        hasCollectionsInitialSync[col] = true;
@@ -341,13 +353,8 @@ function setupCollectionListeners() {
           }
        });
        if (updated) {
-          if(col !== 'orders') db[col].sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
-          if (col === 'orders' || col === 'movements') {
-             if (typeof autoReconcileDispatchedOrders === 'function') autoReconcileDispatchedOrders();
-             if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
-          }
-          safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
-          try{renderAll()}catch(e){}
+          if(col !== 'orders') db[col].sort((a,b) => (a.date||'') > (b.date||'') ? 1 : ((a.date||'') < (b.date||'') ? -1 : 0));
+          scheduleSyncBatch();
        }
     }, err => {
        console.warn(`Alerta Firestore: Error en listener de colección ${col}:`, err);
@@ -417,11 +424,12 @@ function save(){
    try { v1SyncOrderBuckets(); } catch(e) { console.warn('v1SyncOrderBuckets diferido:', e); }
  }
  (db.products||[]).forEach(p=>v1EnsureBucket(p.id));
- safeSet(localStorage,'talcaExpV02',JSON.stringify(db));
+ let serializedDb = JSON.stringify(db);
+ safeSet(localStorage,'talcaExpV02',serializedDb);
  
  // Si los datos locales son ricos, renovar el respaldo de emergencia
  if ((db.fleteros || []).length >= 10) {
-   safeSet(localStorage, 'talcaExp_last_valid_backup', JSON.stringify(db));
+   safeSet(localStorage, 'talcaExp_last_valid_backup', serializedDb);
  }
  
  if (isFirebaseReady) {
@@ -449,15 +457,16 @@ function save(){
        (db[col] || []).forEach(item => {
           if (!item.id) return;
           currentIds.add(item.id);
-          let hash = fastHash(item);
 
           // Blindaje histórico: Si el item es anterior a los últimos 15 días y no está registrado en lastSyncedDb,
           // proviene del historial local de localStorage. Lo registramos en lastSyncedDb para evitar re-subir
-          // documentos antiguos a Firestore innecesariamente.
+          // documentos antiguos a Firestore innecesariamente, sin computar hash.
           if (!lastSyncedDb[col].has(item.id) && item.date && item.date < cutoff15d) {
-             lastSyncedDb[col].set(item.id, hash);
+             lastSyncedDb[col].set(item.id, '__HISTORICAL_LOCAL__');
              return;
           }
+
+          let hash = fastHash(item);
 
           // Blindaje contra degradación de órdenes:
           // Si la orden local no tiene entregas o está en PENDIENTE, pero en la nube ya estaba despachada o con entregas,

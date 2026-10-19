@@ -249,7 +249,14 @@ function renderOrdersV16(){
     return true;
   }).sort(v16NaturalCompareDesc);
 
-  body.innerHTML=list.map(o=>{
+  let totalOrderCount = list.length;
+  let isOrdersCapped = false;
+  if (!carrier && !date && !user && !shift && list.length > 150) {
+    list = list.slice(0, 150);
+    isOrdersCapped = true;
+  }
+
+  let rowsHtml = list.map(o=>{
     let f=v13OrderCarrier(o),ds=o.deliveries||[];
     let req=Array.isArray(o.requestLines)?v15OrderRequestedFardos(o):0;
     let del=Array.isArray(o.requestLines)?v15OrderDeliveredFardos(o):0;
@@ -288,7 +295,13 @@ function renderOrdersV16(){
       <td>${v15FormatFardos(del)}</td>
       <td class="no-print"><button class="btn btn-secondary" onclick="viewOrder('${o.id}')">Abrir</button></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="11" class="muted">No hay órdenes registradas.</td></tr>';
+  }).join('');
+
+  if (isOrdersCapped) {
+    rowsHtml += `<tr><td colspan="11" style="text-align:center;background:var(--card);color:var(--muted);padding:10px;font-size:13px;font-weight:bold;">Mostrando las 150 órdenes más recientes de ${totalOrderCount}. Utilice los filtros para buscar por fletero, día, encargado o turno.</td></tr>`;
+  }
+
+  body.innerHTML = rowsHtml || '<tr><td colspan="11" class="muted">No hay órdenes registradas.</td></tr>';
 
   updateCombinedOrdersBtn();
 }

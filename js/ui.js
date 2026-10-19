@@ -36,9 +36,15 @@ function customConfirm(msg, onConfirm) {
     };
 }
 
-function renderAll(){
+function getActivePageId() {
+  if (typeof document === 'undefined') return 'dashboard';
+  let active = document.querySelector('.page:not(.hidden)');
+  return active ? active.id : 'dashboard';
+}
+
+function renderAll(forceAll = false){
  if(!session)return;
- populateFilters();if(document.getElementById('employeeSearchResults')){searchEmployees();if(selectedEmployeeId)renderEmployeeWorkbench(false);}
+ populateFilters();
  let today=new Date().toISOString().slice(0,10);
  
  let kO = document.getElementById('kOpen');
@@ -68,90 +74,107 @@ function renderAll(){
    if (typeof v11OrderOutstanding === 'function' && v11OrderOutstanding(o) === 0) return false;
    return o.pendingType === 'administrative';
  }).length;
- 
- if(typeof renderRecentV11 === 'function') renderRecentV11();
- if(typeof v14RenderProductConfig === 'function') v14RenderProductConfig();
- if(typeof renderOrdersV16 === 'function') renderOrdersV16();
- if(typeof renderPendingV13 === 'function') renderPendingV13();
- if(typeof renderMovementsV16 === 'function') renderMovementsV16();
- if(typeof renderMaterials === 'function') renderMaterials();
- if(typeof renderStockV1 === 'function') renderStockV1();
-  try {
-    let legacyEmployeesBody=document.getElementById('employeesBody');
-    if(legacyEmployeesBody){
-      legacyEmployeesBody.innerHTML=(db.employees||[]).map(e=>`<tr><td>${e.legajo}</td><td>${e.name} ${e.surname}</td><td>${e.active?'Activo':'Inactivo'}</td><td><b>${e.balance||0} fardos</b></td><td>${e.lastConsumption?fmtDate(e.lastConsumption):'Sin consumos'}</td></tr>`).join('');
-    }
-  } catch(e) { console.error("renderAll employeesBody error", e); }
 
-  try {
-    if(typeof renderPending === 'function') renderPending();
-  } catch(e) { console.error("renderAll renderPending error", e); }
+ let activePage = getActivePageId();
 
-  try {
-    let el = document.getElementById('auditBody');
-    if(el) el.innerHTML=[...(db.audit||[])].reverse().map(a=>`<tr><td>${fmtDate(a.date)}</td><td>${a.user}</td><td>${a.action}</td><td>${a.entity}</td><td>${a.ref}</td><td>${a.detail}</td></tr>`).join('');
-  } catch(e) { console.error("renderAll auditBody error", e); }
+ if (forceAll || activePage === 'dashboard') {
+   if(typeof renderRecentV11 === 'function') renderRecentV11();
+ }
+ if (forceAll || activePage === 'orders') {
+   if(typeof renderOrdersV16 === 'function') renderOrdersV16();
+ }
+ if (forceAll || activePage === 'pending') {
+   if(typeof renderPendingV13 === 'function') renderPendingV13();
+   try { if(typeof renderPending === 'function') renderPending(); } catch(e) { console.error("renderAll renderPending error", e); }
+ }
+ if (forceAll || activePage === 'stock') {
+   if(typeof renderStockV1 === 'function') renderStockV1();
+ }
+ if (forceAll || activePage === 'movements') {
+   if(typeof renderMovementsV16 === 'function') renderMovementsV16();
+ }
+ if (forceAll || activePage === 'materials') {
+   if(typeof renderMaterials === 'function') renderMaterials();
+ }
+ if (forceAll || activePage === 'employees') {
+   if(document.getElementById('employeeSearchResults')){searchEmployees();if(selectedEmployeeId)renderEmployeeWorkbench(false);}
+   try {
+     let legacyEmployeesBody=document.getElementById('employeesBody');
+     if(legacyEmployeesBody){
+       legacyEmployeesBody.innerHTML=(db.employees||[]).map(e=>`<tr><td>${e.legajo}</td><td>${e.name} ${e.surname}</td><td>${e.active?'Activo':'Inactivo'}</td><td><b>${e.balance||0} fardos</b></td><td>${e.lastConsumption?fmtDate(e.lastConsumption):'Sin consumos'}</td></tr>`).join('');
+     }
+   } catch(e) { console.error("renderAll employeesBody error", e); }
+ }
+ if (forceAll || activePage === 'counts') {
+   try {
+     let el = document.getElementById('countsBody');
+     if(el) el.innerHTML=[...(db.counts||[])].reverse().map(c=>`<tr><td>${fmtDate(c.date)}</td><td>${c.shift}</td><td>${c.type}</td><td>${c.user}</td><td>${c.differences?.length||0}</td><td>${c.status}</td></tr>`).join('');
+   } catch(e) { console.error("renderAll countsBody error", e); }
 
-  try {
-    let el = document.getElementById('countsBody');
-    if(el) el.innerHTML=[...(db.counts||[])].reverse().map(c=>`<tr><td>${fmtDate(c.date)}</td><td>${c.shift}</td><td>${c.type}</td><td>${c.user}</td><td>${c.differences?.length||0}</td><td>${c.status}</td></tr>`).join('');
-  } catch(e) { console.error("renderAll countsBody error", e); }
+   try {
+     let el = document.getElementById('handoverAlert');
+     if(el) {
+       let pending=[...(db.counts||[])].reverse().find(c=>c.type==='Cierre de turno'&&c.status==='Pendiente de corroboración'&&c.shift!==session.shift);
+       el.innerHTML=pending?`<div class="alert"><b>Relevo pendiente.</b> ${pending.user} cerró el turno ${pending.shift} con ${pending.differences?.length||0} diferencias. <button class="btn btn-primary" onclick="corroborateCount('${pending.id}')">Corroborar recepción</button></div>`:'';
+     }
+   } catch(e) { console.error("renderAll handoverAlert error", e); }
+ }
+ if (forceAll || activePage === 'audit') {
+   try {
+     let el = document.getElementById('auditBody');
+     if(el) el.innerHTML=[...(db.audit||[])].reverse().map(a=>`<tr><td>${fmtDate(a.date)}</td><td>${a.user}</td><td>${a.action}</td><td>${a.entity}</td><td>${a.ref}</td><td>${a.detail}</td></tr>`).join('');
+   } catch(e) { console.error("renderAll auditBody error", e); }
+ }
+ if (forceAll || activePage === 'settings') {
+   if(typeof v14RenderProductConfig === 'function') v14RenderProductConfig();
+   try {
+     let el = document.getElementById('usersList');
+     if(el) el.innerHTML=(db.users||[]).map(u=>{
+       let isFull = typeof isAuthorizedWriter === 'function' ? isAuthorizedWriter(u) : false;
+       let roleBadge = isFull 
+         ? '<span style="background:#10b981;color:#fff;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Acceso Total</span>'
+         : '<span style="background:#f59e0b;color:#000;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Solo Lectura</span>';
+       let deleteBtn = !isFull
+         ? `<button class="btn btn-danger" style="padding:4px 8px;font-size:12px;" onclick="deleteUserDirect('${u.id}')">Eliminar</button>`
+         : '';
+       return `<div style="padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
+         <div>
+           <b>${u.displayName}</b> ${roleBadge}<br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span>
+         </div>
+         <div style="display:flex;gap:6px;">
+           <button class="btn btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="editUser('${u.id}')">Modificar</button>
+           ${deleteBtn}
+         </div>
+       </div>`;
+     }).join('');
+   } catch(e) { console.error("renderAll usersList error", e); }
 
-  try {
-    let el = document.getElementById('handoverAlert');
-    if(el) {
-      let pending=[...(db.counts||[])].reverse().find(c=>c.type==='Cierre de turno'&&c.status==='Pendiente de corroboración'&&c.shift!==session.shift);
-      el.innerHTML=pending?`<div class="alert"><b>Relevo pendiente.</b> ${pending.user} cerró el turno ${pending.shift} con ${pending.differences?.length||0} diferencias. <button class="btn btn-primary" onclick="corroborateCount('${pending.id}')">Corroborar recepción</button></div>`:'';
-    }
-  } catch(e) { console.error("renderAll handoverAlert error", e); }
+   try {
+     let el = document.getElementById('fleterosList');
+     let sorted = (typeof sortFleteros === 'function') ? sortFleteros([...(db.fleteros||[])]) : (db.fleteros||[]);
+     if(el) el.innerHTML=sorted.map(f=>`
+       <div style="padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
+         <div>
+           <b>${f.name} ${f.surname||''}</b> ${f.active===false?'<span style="color:#ef4444;font-size:12px;font-weight:bold;">(Inactivo)</span>':''}
+           <br><span class="muted">${f.company||'Sin empresa indicada'}</span>
+         </div>
+         <div style="display:flex;gap:6px;">
+           <button class="btn btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="editFletero('${f.id}')">Modificar</button>
+           <button class="btn btn-danger" style="padding:4px 8px;font-size:12px;" onclick="deleteFleteroDirect('${f.id}')">Eliminar</button>
+         </div>
+       </div>`).join('');
+   } catch(e) { console.error("renderAll fleterosList error", e); }
 
-  try {
-    let el = document.getElementById('usersList');
-    if(el) el.innerHTML=(db.users||[]).map(u=>{
-      let isFull = typeof isAuthorizedWriter === 'function' ? isAuthorizedWriter(u) : false;
-      let roleBadge = isFull 
-        ? '<span style="background:#10b981;color:#fff;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Acceso Total</span>'
-        : '<span style="background:#f59e0b;color:#000;font-size:11px;font-weight:bold;padding:1px 6px;border-radius:4px;margin-left:6px;">Solo Lectura</span>';
-      let deleteBtn = !isFull
-        ? `<button class="btn btn-danger" style="padding:4px 8px;font-size:12px;" onclick="deleteUserDirect('${u.id}')">Eliminar</button>`
-        : '';
-      return `<div style="padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <b>${u.displayName}</b> ${roleBadge}<br><span class="muted">@${u.username} · ${u.active?'Activo':'Inactivo'}</span>
-        </div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="editUser('${u.id}')">Modificar</button>
-          ${deleteBtn}
-        </div>
-      </div>`;
-    }).join('');
-  } catch(e) { console.error("renderAll usersList error", e); }
+   try {
+     let el = document.getElementById('employeeConfigList');
+     if(el) el.innerHTML=(db.employees||[]).map(e=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${e.legajo} · ${e.name} ${e.surname}</b><br><span class="muted">${e.active?'Activo':'Inactivo'} · Saldo beneficio: ${e.balance||0} fardos</span><div class="right"><button class="btn btn-secondary" onclick="editEmployee('${e.id}')">Modificar</button></div></div>`).join('');
+   } catch(e) { console.error("renderAll employeeConfigList error", e); }
 
-  try {
-    let el = document.getElementById('fleterosList');
-    let sorted = (typeof sortFleteros === 'function') ? sortFleteros([...(db.fleteros||[])]) : (db.fleteros||[]);
-    if(el) el.innerHTML=sorted.map(f=>`
-      <div style="padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <b>${f.name} ${f.surname||''}</b> ${f.active===false?'<span style="color:#ef4444;font-size:12px;font-weight:bold;">(Inactivo)</span>':''}
-          <br><span class="muted">${f.company||'Sin empresa indicada'}</span>
-        </div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-secondary" style="padding:4px 8px;font-size:12px;" onclick="editFletero('${f.id}')">Modificar</button>
-          <button class="btn btn-danger" style="padding:4px 8px;font-size:12px;" onclick="deleteFleteroDirect('${f.id}')">Eliminar</button>
-        </div>
-      </div>`).join('');
-  } catch(e) { console.error("renderAll fleterosList error", e); }
-
-  try {
-    let el = document.getElementById('employeeConfigList');
-    if(el) el.innerHTML=(db.employees||[]).map(e=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${e.legajo} · ${e.name} ${e.surname}</b><br><span class="muted">${e.active?'Activo':'Inactivo'} · Saldo beneficio: ${e.balance||0} fardos</span><div class="right"><button class="btn btn-secondary" onclick="editEmployee('${e.id}')">Modificar</button></div></div>`).join('');
-  } catch(e) { console.error("renderAll employeeConfigList error", e); }
-
-  try {
-    let el = document.getElementById('productsList');
-    if(el) el.innerHTML=(db.products||[]).map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet</span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('');
-  } catch(e) { console.error("renderAll productsList error", e); }
+   try {
+     let el = document.getElementById('productsList');
+     if(el) el.innerHTML=(db.products||[]).map(p=>`<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${p.id} · ${p.name}</b><br><span class="muted">${p.pack} un/fardo · ${p.perCut} fardos/corte · ${p.cuts} cortes/pallet</span><div class="right"><button class="btn btn-secondary" onclick="editProduct('${p.id}')">Modificar</button></div></div>`).join('');
+   } catch(e) { console.error("renderAll productsList error", e); }
+ }
 }
 
 // ===== Talca Expedición v1.1: migración, empleados, stock pendiente y backups =====
@@ -1920,9 +1943,14 @@ window.addEventListener('resize',v16ApplyAdaptiveMode);
 // Helpers
 // ------------------------------------------------------------------
 function v16NaturalCompareDesc(a,b){
-  return String(b?.number??'').localeCompare(String(a?.number??''),'es',{
-    numeric:true,sensitivity:'base'
-  });
+  let numA = parseInt(a?.number, 10);
+  let numB = parseInt(b?.number, 10);
+  if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+    return numB - numA;
+  }
+  let sA = String(a?.number ?? '');
+  let sB = String(b?.number ?? '');
+  return sA > sB ? -1 : (sA < sB ? 1 : 0);
 }
 function v16MovementFardos(m){
   let p=db.products.find(x=>x.id===m.productId);
