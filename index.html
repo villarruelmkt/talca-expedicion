@@ -189,7 +189,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 
 <section id="audit" class="page hidden">
-  <div class="headrow"><div><h1>Auditoría</h1><div class="muted">Historial básico de altas, modificaciones, anulaciones y operaciones.</div></div><button class="btn btn-secondary" onclick="exportAuditCSV()">Exportar CSV</button></div>
+  <div class="headrow"><div><h1>Auditoría</h1><div class="muted">Historial básico de altas, modificaciones, anulaciones y operaciones (últimos 50 eventos).</div></div><div class="toolbar"><button class="btn btn-secondary" onclick="syncAuditOnDemand(true)"><span class="icon">🔄</span> Actualizar</button><button class="btn btn-secondary" onclick="exportAuditCSV()">Exportar CSV</button></div></div>
   <div class="card tablewrap"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Referencia</th><th>Detalle</th></tr></thead><tbody id="auditBody"></tbody></table></div>
 </section>
 
@@ -228,7 +228,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 
 
-<script src="app.min.js?v=41" charset="utf-8"></script>
+<script src="app.min.js?v=42" charset="utf-8"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

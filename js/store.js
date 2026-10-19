@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 41;
+const APP_BUILD_VERSION = 42;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -80,9 +80,16 @@ function isAuthorizedWriter(userObjOrName) {
 
 let hasInitialCloudSync = false;
 let hasCollectionsInitialSync = {
-  orders: false, movements: false, audit: false, materialMoves: false, counts: false
+  orders: false, movements: false, audit: true, materialMoves: false, counts: false
 };
 let lastCloudUpdatedAt = null;
+
+function getSyncCutoffDateISO(days = 15) {
+  let d = new Date();
+  d.setDate(d.getDate() - days);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+}
 
 let lastMasterHashes = {
   fleteros: null,
@@ -270,8 +277,18 @@ docRef.onSnapshot((doc) => {
 });
 
 function setupCollectionListeners() {
-  ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
-    firestoreDb.collection(col).onSnapshot(snap => {
+  const cutoff15d = getSyncCutoffDateISO(15);
+  const cutoff30d = getSyncCutoffDateISO(30);
+
+  const configs = [
+    { col: 'orders', query: firestoreDb.collection('orders').where('date', '>=', cutoff15d) },
+    { col: 'movements', query: firestoreDb.collection('movements').where('date', '>=', cutoff15d) },
+    { col: 'materialMoves', query: firestoreDb.collection('materialMoves').where('date', '>=', cutoff15d) },
+    { col: 'counts', query: firestoreDb.collection('counts').where('date', '>=', cutoff30d) }
+  ];
+
+  configs.forEach(({ col, query }) => {
+    query.onSnapshot(snap => {
        hasCollectionsInitialSync[col] = true;
        let updated = false;
        snap.docChanges().forEach(change => {
@@ -314,9 +331,13 @@ function setupCollectionListeners() {
           }
           if (change.type === 'removed') {
              let data = change.doc.data();
-             db[col] = (db[col]||[]).filter(x => x.id !== data.id);
-             lastSyncedDb[col].delete(data.id);
-             updated = true;
+             // Blindaje de retención histórica: Solo eliminar si el documento fue explícitamente borrado (_deleted: true),
+             // NUNCA si simplemente salió del rango de la consulta temporal de 15 días.
+             if (data && data._deleted) {
+                db[col] = (db[col]||[]).filter(x => x.id !== data.id);
+                lastSyncedDb[col].delete(data.id);
+                updated = true;
+             }
           }
        });
        if (updated) {
@@ -334,6 +355,55 @@ function setupCollectionListeners() {
   });
 }
 setupCollectionListeners();
+
+let lastAuditFetchTime = 0;
+let isAuditFetching = false;
+function syncAuditOnDemand(force = false) {
+  if (!isFirebaseReady || !firestoreDb) return;
+  let nowTime = Date.now();
+  if (!force && (nowTime - lastAuditFetchTime < 30000)) {
+    return;
+  }
+  if (isAuditFetching) return;
+  isAuditFetching = true;
+  lastAuditFetchTime = nowTime;
+
+  let auditBody = document.getElementById('auditBody');
+  if (auditBody && (!db.audit || db.audit.length === 0)) {
+    auditBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:16px;color:#6b7280;">Sincronizando últimos 50 registros de auditoría...</td></tr>';
+  }
+
+  firestoreDb.collection('audit')
+    .orderBy('date', 'desc')
+    .limit(50)
+    .get()
+    .then(snap => {
+      isAuditFetching = false;
+      let remoteItems = [];
+      snap.forEach(doc => {
+        let data = doc.data();
+        if (data && !data._deleted) {
+          remoteItems.push(data);
+          lastSyncedDb.audit.set(data.id, fastHash(data));
+        }
+      });
+      if (remoteItems.length > 0) {
+        let map = new Map((db.audit || []).map(x => [x.id, x]));
+        remoteItems.forEach(x => map.set(x.id, x));
+        db.audit = Array.from(map.values()).sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
+        if (db.audit.length > 100) {
+          db.audit = db.audit.slice(-100);
+        }
+        safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+        if (typeof renderAll === 'function') renderAll();
+      }
+    })
+    .catch(err => {
+      isAuditFetching = false;
+      console.warn('Alerta Firestore: Error al sincronizar auditoría bajo demanda:', err);
+    });
+}
+window.syncAuditOnDemand = syncAuditOnDemand;
 
 // Blindaje contra saturación de cuota:
 // Se eliminó la re-escritura masiva de colecciones a los 5 segundos que provocaba agotamiento de cuota diaria (Error 429).
@@ -368,52 +438,72 @@ function save(){
      return;
    }
 
-   // Diff & Sync: Solo subimos a colecciones los items modificados o nuevos
-   ['orders', 'movements', 'audit', 'materialMoves', 'counts'].forEach(col => {
-      // Blindaje: NUNCA subir a Firestore si esta colección específica no ha recibido su primer snapshot de la nube
-      if (!hasCollectionsInitialSync[col]) {
-         return;
-      }
-      let currentIds = new Set();
-      (db[col] || []).forEach(item => {
-         if (!item.id) return;
-         currentIds.add(item.id);
-         let hash = fastHash(item);
+    const cutoff15d = getSyncCutoffDateISO(15);
+    // Diff & Sync: Solo subimos a colecciones los items modificados o nuevos
+    ['orders', 'movements', 'materialMoves', 'counts'].forEach(col => {
+       // Blindaje: NUNCA subir a Firestore si esta colección específica no ha recibido su primer snapshot de la nube
+       if (!hasCollectionsInitialSync[col]) {
+          return;
+       }
+       let currentIds = new Set();
+       (db[col] || []).forEach(item => {
+          if (!item.id) return;
+          currentIds.add(item.id);
+          let hash = fastHash(item);
 
-         // Blindaje contra degradación de órdenes:
-         // Si la orden local no tiene entregas o está en PENDIENTE, pero en la nube ya estaba despachada o con entregas,
-         // NO sobreescribir la versión de la nube con la versión local degradada.
-         if (col === 'orders') {
-            let lastSyncedHash = lastSyncedDb[col].get(item.id);
-            if (lastSyncedHash) {
-               try {
-                  let lastSyncedObj = JSON.parse(lastSyncedHash);
-                  let remoteHasDeliveries = Boolean((lastSyncedObj.deliveries || []).length);
-                  let localHasDeliveries = Boolean((item.deliveries || []).length);
-                  let remoteIsDispatched = lastSyncedObj.status === 'Despachada' || lastSyncedObj.status === 'Completa';
-                  let localIsPending = item.status === 'PENDIENTE' || item.status === 'Pendiente de despacho';
-                  if ((remoteHasDeliveries && !localHasDeliveries) || (remoteIsDispatched && localIsPending)) {
-                     console.warn(`Blindaje de orden: Se bloqueó sobreescritura de orden N.° ${item.number} con estado local degradado.`);
-                     return;
-                  }
-               } catch(e){}
-            }
-         }
+          // Blindaje histórico: Si el item es anterior a los últimos 15 días y no está registrado en lastSyncedDb,
+          // proviene del historial local de localStorage. Lo registramos en lastSyncedDb para evitar re-subir
+          // documentos antiguos a Firestore innecesariamente.
+          if (!lastSyncedDb[col].has(item.id) && item.date && item.date < cutoff15d) {
+             lastSyncedDb[col].set(item.id, hash);
+             return;
+          }
 
-         if (lastSyncedDb[col].get(item.id) !== hash) {
-            firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
-            lastSyncedDb[col].set(item.id, hash);
-         }
+          // Blindaje contra degradación de órdenes:
+          // Si la orden local no tiene entregas o está en PENDIENTE, pero en la nube ya estaba despachada o con entregas,
+          // NO sobreescribir la versión de la nube con la versión local degradada.
+          if (col === 'orders') {
+             let lastSyncedHash = lastSyncedDb[col].get(item.id);
+             if (lastSyncedHash) {
+                try {
+                   let lastSyncedObj = JSON.parse(lastSyncedHash);
+                   let remoteHasDeliveries = Boolean((lastSyncedObj.deliveries || []).length);
+                   let localHasDeliveries = Boolean((item.deliveries || []).length);
+                   let remoteIsDispatched = lastSyncedObj.status === 'Despachada' || lastSyncedObj.status === 'Completa';
+                   let localIsPending = item.status === 'PENDIENTE' || item.status === 'Pendiente de despacho';
+                   if ((remoteHasDeliveries && !localHasDeliveries) || (remoteIsDispatched && localIsPending)) {
+                      console.warn(`Blindaje de orden: Se bloqueó sobreescritura de orden N.° ${item.number} con estado local degradado.`);
+                      return;
+                   }
+                } catch(e){}
+             }
+          }
+
+          if (lastSyncedDb[col].get(item.id) !== hash) {
+             firestoreDb.collection(col).doc(item.id).set(item).catch(console.error);
+             lastSyncedDb[col].set(item.id, hash);
+          }
+       });
+       
+       for (let id of lastSyncedDb[col].keys()) {
+          if (!currentIds.has(id)) {
+             let dRef = firestoreDb.collection(col).doc(id);
+             dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
+             lastSyncedDb[col].delete(id);
+          }
+       }
+    });
+
+    // Sincronización saliente de auditoría (solo los eventos recientes de la sesión activa para evitar subir histórico)
+    if (isFirebaseReady && firestoreDb && isAuthorizedWriter(session)) {
+      (db.audit || []).slice(-15).forEach(entry => {
+        if (entry && entry.id && !lastSyncedDb.audit.has(entry.id)) {
+          let hash = fastHash(entry);
+          firestoreDb.collection('audit').doc(entry.id).set(entry).catch(console.error);
+          lastSyncedDb.audit.set(entry.id, hash);
+        }
       });
-      
-      for (let id of lastSyncedDb[col].keys()) {
-         if (!currentIds.has(id)) {
-            let dRef = firestoreDb.collection(col).doc(id);
-            dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
-            lastSyncedDb[col].delete(id);
-         }
-      }
-   });
+    }
 
    // CAMINO A: Guardado granular y desacoplado mediante diffing de campos en talca/data
     let updatePayload = {};
@@ -605,6 +695,9 @@ function showPage(id){
   document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));
   document.getElementById(id).classList.remove('hidden');
   document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
+  if (id === 'audit') {
+    syncAuditOnDemand();
+  }
   renderAll();
 }
 function modal(content){
@@ -656,7 +749,24 @@ function equivalent(total, prod) {
   }
   return `${Math.floor(total/prod.pack)} fardos${total%prod.pack?' + '+total%prod.pack+' un.':''}`;
 }
-function audit(action,entity,ref,detail=''){db.audit=db.audit||[];db.audit.push({id:uid('a'),date:now(),user:session?.user||'Sistema',action,entity,ref,detail})}
+function audit(action,entity,ref,detail=''){
+  db.audit=db.audit||[];
+  let entry = {
+    id: uid('a'),
+    date: now(),
+    user: session?.user || 'Sistema',
+    action,
+    entity,
+    ref,
+    detail
+  };
+  db.audit.push(entry);
+  if (isFirebaseReady && firestoreDb && isAuthorizedWriter(session)) {
+    let hash = fastHash(entry);
+    firestoreDb.collection('audit').doc(entry.id).set(entry).catch(console.error);
+    lastSyncedDb.audit.set(entry.id, hash);
+  }
+}
 
 // Auto-repair: Eliminar movimientos de materiales con fleteroId inválido
 setTimeout(() => {
