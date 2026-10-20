@@ -106,5 +106,13 @@ function load(){
  data.materialMoves=data.materialMoves||[];
  data.counts=data.counts||[];
  data.products.forEach(p=>{if(data.stock[p.id]===undefined)data.stock[p.id]=0});
+
+ // Blindaje de integridad: Purgar inmediatamente cualquier dato eliminado o con id inválido/ausente
+ ['orders', 'movements', 'materialMoves', 'counts', 'audit'].forEach(col => {
+   if (Array.isArray(data[col])) {
+     data[col] = data[col].filter(x => x && x.id && x.id !== 'undefined' && !x._deleted);
+   }
+ });
+
  return data
 }

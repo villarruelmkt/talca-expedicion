@@ -1685,7 +1685,9 @@ exportPendingCSV=function(){
 };
 
 function viewOrder(id){
-  let o=db.orders.find(x=>x.id===id);if(!o)return;
+  if(!id || id === 'undefined') return;
+  let o=(db.orders||[]).find(x=>x && (x.id===id || String(x.id)===String(id)));
+  if(!o) return;
   let f=v13OrderCarrier(o),modern=Array.isArray(o.requestLines),outstanding=modern?v11OrderOutstanding(o):0;
   let requests=modern?`<div class="card v11-request-card"><h3>Solicitud</h3>${o.requestLines.map(l=>{let p=db.products.find(x=>x.id===l.productId);return `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${v14Text(p?.name||l.productId)}</b>: ${equivalent(l.total,p)} · Resuelto ${equivalent(Math.min(l.total,l.resolvedTotal||0),p)} · <b>Restante ${equivalent(v11LineOutstanding(l),p)}</b></div>`}).join('')}</div>`:'';
   let deliveries=(o.deliveries||[]).map((d,i)=>`<div class="card" style="margin-top:10px"><b>Salida ${i+1}</b> · ${fmtDate(d.date)} · ${v14Text(d.user||'')} · Turno ${v14Text(d.shift||'')}<br><br>${(d.lines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId),s=db.products.find(x=>x.id===(l.sourceProductId||l.productId)),change=l.sourceProductId&&l.sourceProductId!==l.productId?` <span class="status open">Sustituye a ${v14Text(s?.name||l.sourceProductId)}</span>`:'';return `<b>${v14Text(p?.name||l.productId)}</b>: ${equivalent(l.total,p)}${change}`}).join('<br>')}<br><span class="muted">Pallets: sale ${d.palletOut||0}, entra ${d.palletIn||0}. Chapadur: sale ${d.chapOut||0}, entra ${d.chapIn||0}.</span></div>`).join('')||'<div class="card" style="margin-top:10px"><span class="muted">Todavía no se confirmó ninguna salida.</span></div>';

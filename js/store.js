@@ -61,9 +61,15 @@ function applyVerifiedStockV38() {
 }
 applyVerifiedStockV38();
 
+// Blindaje de integridad: Purgar en memoria cualquier elemento eliminado o con id inválido
+['orders', 'movements', 'materialMoves', 'counts', 'audit'].forEach(col => {
+  if (Array.isArray(db[col])) {
+    db[col] = db[col].filter(x => x && x.id && x.id !== 'undefined' && !x._deleted);
+  }
+});
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 48;
+const APP_BUILD_VERSION = 49;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -328,32 +334,42 @@ function setupCollectionListeners() {
   configs.forEach(({ col, query }) => {
     query.onSnapshot(snap => {
        hasCollectionsInitialSync[col] = true;
-       let updated = false;
-       snap.docChanges().forEach(change => {
+            snap.docChanges().forEach(change => {
+          let docId = change.doc.id;
+          let data = change.doc.data() || {};
+          if (!data.id) data.id = docId;
+
           if (change.type === 'added' || change.type === 'modified') {
-             let data = change.doc.data();
              if (data._deleted) {
-                db[col] = (db[col]||[]).filter(x => x.id !== data.id);
+                let prevLen = (db[col] || []).length;
+                db[col] = (db[col] || []).filter(x => x && x.id !== docId && x.id !== data.id && !x._deleted);
+                lastSyncedDb[col].delete(docId);
                 lastSyncedDb[col].delete(data.id);
-                updated = true;
+                if ((db[col] || []).length !== prevLen) updated = true;
                 return;
              }
-             let idx = (db[col]||[]).findIndex(x => x.id === data.id);
+             let idx = (db[col] || []).findIndex(x => x && (x.id === docId || x.id === data.id));
              if (idx >= 0) {
                 // Blindaje de preservación: Si local ya tiene entregas y el cambio entrante no las tiene (posible eco stale), preservar entregas
-                if (col === 'orders' && (db[col][idx].deliveries||[]).length > (data.deliveries||[]).length) {
+                if (col === 'orders' && (db[col][idx].deliveries || []).length > (data.deliveries || []).length) {
                    data.deliveries = db[col][idx].deliveries;
                    data.requestLines = db[col][idx].requestLines;
                    if (db[col][idx].status === 'Despachada') data.status = 'Despachada';
                 }
-                db[col][idx] = data;
+                let oldHash = fastHash(db[col][idx]);
+                let newHash = fastHash(data);
+                if (oldHash !== newHash) {
+                   db[col][idx] = data;
+                   lastSyncedDb[col].set(docId, newHash);
+                   updated = true;
+                }
              } else {
-                db[col] = db[col]||[];
+                db[col] = db[col] || [];
                 db[col].push(data);
 
                 // Blindaje reactivo de stock en tiempo real:
                 // Si llega un movimiento nuevo de otra máquina, impactar el stock físico local de inmediato
-                if (col === 'movements' && change.type === 'added' && !lastSyncedDb[col].has(data.id) && data.productId && data.total && !data._deleted) {
+                if (col === 'movements' && change.type === 'added' && !lastSyncedDb[col].has(docId) && data.productId && data.total && !data._deleted) {
                    if (data.date && typeof STOCK_BASELINE_DATE !== 'undefined' && data.date > STOCK_BASELINE_DATE) {
                       let delta = data.dir === 'in' ? Number(data.total) : -Number(data.total);
                       db.stock[data.productId] = (Number(db.stock[data.productId]) || 0) + delta;
@@ -363,18 +379,20 @@ function setupCollectionListeners() {
                       lastMasterHashes.stock = fastHash(db.stock);
                    }
                 }
+                lastSyncedDb[col].set(docId, fastHash(data));
+                updated = true;
              }
-             lastSyncedDb[col].set(data.id, fastHash(data));
-             updated = true;
           }
           if (change.type === 'removed') {
              let data = change.doc.data();
              // Blindaje de retención histórica: Solo eliminar si el documento fue explícitamente borrado (_deleted: true),
-             // NUNCA si simplemente salió del rango de la consulta temporal de 15 días.
+             // NUNCA si simplemente salió del rango de la consulta temporal.
              if (data && data._deleted) {
-                db[col] = (db[col]||[]).filter(x => x.id !== data.id);
-                lastSyncedDb[col].delete(data.id);
-                updated = true;
+                let prevLen = (db[col] || []).length;
+                db[col] = (db[col] || []).filter(x => x && x.id !== docId && x.id !== (data.id || docId) && !x._deleted);
+                lastSyncedDb[col].delete(docId);
+                if (data.id) lastSyncedDb[col].delete(data.id);
+                if ((db[col] || []).length !== prevLen) updated = true;
              }
           }
        });
@@ -418,8 +436,9 @@ function syncAuditOnDemand(force = false) {
       isAuditFetching = false;
       let remoteItems = [];
       snap.forEach(doc => {
-        let data = doc.data();
-        if (data && !data._deleted) {
+        let data = doc.data() || {};
+        if (!data.id) data.id = doc.id;
+        if (data && !data._deleted && data.id && data.id !== 'undefined') {
           remoteItems.push(data);
           lastSyncedDb.audit.set(data.id, fastHash(data));
         }
@@ -475,8 +494,9 @@ function syncMovementsOnDemand(force = false) {
       isMovementsFetching = false;
       let remoteItems = [];
       snap.forEach(doc => {
-        let data = doc.data();
-        if (data && !data._deleted) {
+        let data = doc.data() || {};
+        if (!data.id) data.id = doc.id;
+        if (data && !data._deleted && data.id && data.id !== 'undefined') {
           remoteItems.push(data);
           lastSyncedDb.movements.set(data.id, fastHash(data));
         }
@@ -584,9 +604,13 @@ function save(){
        });
        
        for (let id of lastSyncedDb[col].keys()) {
+          if (!id || id === 'undefined') {
+             lastSyncedDb[col].delete(id);
+             continue;
+          }
           if (!currentIds.has(id)) {
              let dRef = firestoreDb.collection(col).doc(id);
-             dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
+             dRef.set({ id: id, _deleted: true }, { merge: true }).catch(console.error);
              lastSyncedDb[col].delete(id);
           }
        }

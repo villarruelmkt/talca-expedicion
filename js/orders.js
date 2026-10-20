@@ -74,22 +74,33 @@ function populateFilters(){
   let prevPfProduct = document.getElementById('pfProduct')?.value || '';
 
   if(document.getElementById('ofCarrier')){
-    ofCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();
-    if(prevCarrier) ofCarrier.value = prevCarrier;
-    mfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();
-    if(prevMfCarrier) mfCarrier.value = prevMfCarrier;
-    if(document.getElementById('pfCarrier')) {
-      pfCarrier.innerHTML='<option value="">Todos</option>'+fleteroOptions();
+    let carrierHtml = '<option value="">Todos</option>'+fleteroOptions();
+    if(ofCarrier.innerHTML !== carrierHtml) {
+      ofCarrier.innerHTML = carrierHtml;
+      if(prevCarrier) ofCarrier.value = prevCarrier;
+    }
+    if(document.getElementById('mfCarrier') && mfCarrier.innerHTML !== carrierHtml) {
+      mfCarrier.innerHTML = carrierHtml;
+      if(prevMfCarrier) mfCarrier.value = prevMfCarrier;
+    }
+    if(document.getElementById('pfCarrier') && pfCarrier.innerHTML !== carrierHtml) {
+      pfCarrier.innerHTML = carrierHtml;
       if(prevPfCarrier) pfCarrier.value = prevPfCarrier;
     }
     if(document.getElementById('pfProduct')) {
-      pfProduct.innerHTML='<option value="">Todos</option>'+productOptions();
-      if(prevPfProduct) pfProduct.value = prevPfProduct;
+      let prodHtml = '<option value="">Todos</option>'+productOptions();
+      if(pfProduct.innerHTML !== prodHtml) {
+        pfProduct.innerHTML = prodHtml;
+        if(prevPfProduct) pfProduct.value = prevPfProduct;
+      }
     }
   }
   if(document.getElementById('ofUser')) {
-    ofUser.innerHTML='<option value="">Todos</option>'+(db.users||[]).map(u=>`<option value="${u.displayName}">${u.displayName}</option>`).join('');
-    if(prevUser) ofUser.value = prevUser;
+    let userHtml = '<option value="">Todos</option>'+(db.users||[]).map(u=>`<option value="${u.displayName}">${u.displayName}</option>`).join('');
+    if(ofUser.innerHTML !== userHtml) {
+      ofUser.innerHTML = userHtml;
+      if(prevUser) ofUser.value = prevUser;
+    }
   }
 }
 function clearOrderFilters(){ofCarrier.value='';ofDate.value='';ofUser.value='';ofShift.value='';renderOrders()}
@@ -121,7 +132,7 @@ function printSection(id,title){document.querySelectorAll('.page').forEach(p=>p.
 }
 
 function deleteOrder(id){
-  let o = (db.orders || []).find(x => x.id === id);
+  let o = (db.orders || []).find(x => x && (x.id === id || String(x.id) === String(id)));
   if(!o) return;
 
   let hasDeliveries = Boolean((o.deliveries || []).length);
@@ -158,30 +169,37 @@ function deleteOrder(id){
       });
     });
     // Eliminar movimientos de stock vinculados a esta orden
-    let deletedMovements = (db.movements || []).filter(m => m.ref === o.number && m.type === 'Orden de carga');
-    db.movements = (db.movements || []).filter(m => !(m.ref === o.number && m.type === 'Orden de carga'));
+    let deletedMovements = (db.movements || []).filter(m => m && m.ref === o.number && m.type === 'Orden de carga');
+    db.movements = (db.movements || []).filter(m => !(m && m.ref === o.number && m.type === 'Orden de carga'));
     // Eliminar movimientos de materiales vinculados a esta orden
-    let deletedMaterialMoves = (db.materialMoves || []).filter(m => m.ref === o.number && m.source === 'Orden de carga');
-    db.materialMoves = (db.materialMoves || []).filter(m => !(m.ref === o.number && m.source === 'Orden de carga'));
+    let deletedMaterialMoves = (db.materialMoves || []).filter(m => m && m.ref === o.number && m.source === 'Orden de carga');
+    db.materialMoves = (db.materialMoves || []).filter(m => !(m && m.ref === o.number && m.source === 'Orden de carga'));
     
     if (typeof firestoreDb !== 'undefined') {
       deletedMovements.forEach(m => {
         let dRef = firestoreDb.collection('movements').doc(m.id);
-        dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
+        dRef.set({ id: m.id, _deleted: true }, { merge: true }).catch(console.error);
+        if (typeof lastSyncedDb !== 'undefined' && lastSyncedDb.movements) lastSyncedDb.movements.delete(m.id);
       });
       deletedMaterialMoves.forEach(m => {
         let dRef = firestoreDb.collection('materialMoves').doc(m.id);
-        dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
+        dRef.set({ id: m.id, _deleted: true }, { merge: true }).catch(console.error);
+        if (typeof lastSyncedDb !== 'undefined' && lastSyncedDb.materialMoves) lastSyncedDb.materialMoves.delete(m.id);
       });
     }
   }
 
   // 3. Eliminar la orden de la base de datos
-  db.orders = (db.orders || []).filter(x => x.id !== id);
+  db.orders = (db.orders || []).filter(x => x && x.id !== id && String(x.id) !== String(id) && !x._deleted);
   if (typeof firestoreDb !== 'undefined') {
     let dRef = firestoreDb.collection('orders').doc(id);
-    dRef.set({ _deleted: true }, { merge: true }).catch(console.error);
+    dRef.set({ id: id, _deleted: true }, { merge: true }).catch(console.error);
+    if (typeof lastSyncedDb !== 'undefined' && lastSyncedDb.orders) lastSyncedDb.orders.delete(id);
   }
+
+  // Guardar inmediatamente en localStorage de forma atómica antes de save()
+  safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+  safeSet(localStorage, 'talcaExp_last_valid_backup', JSON.stringify(db));
 
   // 4. Registrar en auditoría
   if(typeof audit === 'function'){

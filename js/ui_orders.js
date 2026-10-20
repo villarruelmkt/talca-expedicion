@@ -221,6 +221,7 @@ function renderOrdersV16(){
       shift=document.getElementById('ofShift')?.value||'';
 
   let list=(db.orders||[]).filter(o=>{
+    if (!o || o._deleted || !o.id || o.id === 'undefined') return false;
     if (carrier && o.fleteroId !== carrier) return false;
     let ds = o.deliveries || [];
 
@@ -301,7 +302,10 @@ function renderOrdersV16(){
     rowsHtml += `<tr><td colspan="11" style="text-align:center;background:var(--card);color:var(--muted);padding:10px;font-size:13px;font-weight:bold;">Mostrando las 150 órdenes más recientes de ${totalOrderCount}. Utilice los filtros para buscar por fletero, día, encargado o turno.</td></tr>`;
   }
 
-  body.innerHTML = rowsHtml || '<tr><td colspan="11" class="muted">No hay órdenes registradas.</td></tr>';
+  let finalHtml = rowsHtml || '<tr><td colspan="11" class="muted">No hay órdenes registradas.</td></tr>';
+  if (body.innerHTML !== finalHtml) {
+    body.innerHTML = finalHtml;
+  }
 
   updateCombinedOrdersBtn();
 }
