@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Descargar Base de Datos de Firebase - Talca Expedición</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px 20px; background: #0f172a; color: #f8fafc; }
+    .card { background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-width: 600px; margin: 0 auto; text-align: left; border: 1px solid #334155; }
+    h2 { margin-top: 0; color: #38bdf8; text-align: center; }
+    .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 25px; line-height: 1.5; }
+    .btn { background: #2563eb; color: white; border: none; padding: 14px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; transition: background 0.2s; display: block; text-align: center; }
+    .btn:hover { background: #1d4ed8; }
+    .btn:disabled { background: #475569; cursor: not-allowed; }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0; }
+    .stat-item { background: #0f172a; padding: 12px; border-radius: 6px; border: 1px solid #334155; }
+    .stat-val { font-size: 20px; font-weight: bold; color: #38bdf8; }
+    .stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .info-box { background: #0284c71a; border: 1px solid #0284c7; color: #bae6fd; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; margin-top: 20px; }
+    .warning-box { background: #ef44441a; border: 1px solid #ef4444; color: #fca5a5; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; margin-top: 20px; }
+    .success-box { background: #22c55e1a; border: 1px solid #22c55e; color: #86efac; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; margin-top: 20px; }
+    #log { margin-top: 15px; font-size: 13px; color: #cbd5e1; max-height: 120px; overflow-y: auto; background: #0f172a; padding: 10px; border-radius: 6px; border: 1px solid #334155; display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Descargar Base de Datos Firebase</h2>
+    <div class="subtitle">Herramienta directa de exportación de colecciones desde los servidores de Firestore a un archivo JSON estándar.</div>
+
+    <button id="btnDownload" class="btn" onclick="startExport()">📥 Descargar base completa de Firestore (.json)</button>
+
+    <div id="statusArea"></div>
+
+    <div class="stat-grid" id="statsGrid" style="display:none;">
+      <div class="stat-item"><div class="stat-val" id="statOrders">0</div><div class="stat-label">Órdenes</div></div>
+      <div class="stat-item"><div class="stat-val" id="statMovements">0</div><div class="stat-label">Movimientos</div></div>
+      <div class="stat-item"><div class="stat-val" id="statMaterials">0</div><div class="stat-label">Movimientos Materiales</div></div>
+      <div class="stat-item"><div class="stat-val" id="statCounts">0</div><div class="stat-label">Conteos</div></div>
+    </div>
+
+    <pre id="log"></pre>
+
+    <div class="info-box">
+      <b>💡 Nota importante sobre la cuota diaria:</b><br>
+      Si la cuota gratuita diaria de Firebase (50.000 lecturas) está agotada, Firebase devolverá el error <code>429 Resource Exhausted</code>. La cuota se reinicia automáticamente todos los días a las <b>04:00 AM hora argentina</b>.<br><br>
+      <b>Recuerda:</b> También puedes exportar el respaldo completo al instante desde la propia aplicación abierta en la PC principal mediante el botón <b>Copias de seguridad &gt; Descargar respaldo</b>.
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCeeHUCuY0oGYhIPFeE1fhJk6-_O9eYxVU",
+      authDomain: "talca-expedicion.firebaseapp.com",
+      projectId: "talca-expedicion",
+      storageBucket: "talca-expedicion.firebasestorage.app",
+      messagingSenderId: "658825484631",
+      appId: "1:658825484631:web:cb95fdc34a838b6306c612",
+      measurementId: "G-HXL7VNKPJ7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.style.display = 'block';
+      el.textContent += msg + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function startExport() {
+      const btn = document.getElementById('btnDownload');
+      const statusArea = document.getElementById('statusArea');
+      const statsGrid = document.getElementById('statsGrid');
+      const logEl = document.getElementById('log');
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Conectando con Firestore...';
+      statusArea.innerHTML = '';
+      logEl.textContent = '';
+
+      try {
+        log('1. Consultando documento maestro talca/data...');
+        const masterSnap = await db.collection('talca').doc('data').get();
+        const masterData = masterSnap.exists ? masterSnap.data() : {};
+
+        log('2. Consultando colección orders...');
+        const ordersSnap = await db.collection('orders').get();
+        const orders = [];
+        ordersSnap.forEach(doc => {
+          const d = doc.data() || {};
+          if (!d.id) d.id = doc.id;
+          if (!d._deleted) orders.push(d);
+        });
+
+        log('3. Consultando colección movements...');
+        const movesSnap = await db.collection('movements').get();
+        const movements = [];
+        movesSnap.forEach(doc => {
+          const d = doc.data() || {};
+          if (!d.id) d.id = doc.id;
+          if (!d._deleted) movements.push(d);
+        });
+
+        log('4. Consultando colección materialMoves...');
+        const matSnap = await db.collection('materialMoves').get();
+        const materialMoves = [];
+        matSnap.forEach(doc => {
+          const d = doc.data() || {};
+          if (!d.id) d.id = doc.id;
+          if (!d._deleted) materialMoves.push(d);
+        });
+
+        log('5. Consultando colección counts...');
+        const countsSnap = await db.collection('counts').get();
+        const counts = [];
+        countsSnap.forEach(doc => {
+          const d = doc.data() || {};
+          if (!d.id) d.id = doc.id;
+          if (!d._deleted) counts.push(d);
+        });
+
+        log('6. Consultando colección audit...');
+        const auditSnap = await db.collection('audit').orderBy('date', 'desc').limit(100).get();
+        const audit = [];
+        auditSnap.forEach(doc => {
+          const d = doc.data() || {};
+          if (!d.id) d.id = doc.id;
+          if (!d._deleted) audit.push(d);
+        });
+
+        // Construir base unificada compatible con Talca Expedición
+        const fullDatabase = Object.assign({}, masterData, {
+          orders: orders.sort((a,b) => (b.number || 0) - (a.number || 0)),
+          movements: movements.sort((a,b) => (a.date||'') > (b.date||'') ? 1 : ((a.date||'') < (b.date||'') ? -1 : 0)),
+          materialMoves: materialMoves,
+          counts: counts,
+          audit: audit
+        });
+
+        // Actualizar vista
+        document.getElementById('statOrders').innerText = orders.length;
+        document.getElementById('statMovements').innerText = movements.length;
+        document.getElementById('statMaterials').innerText = materialMoves.length;
+        document.getElementById('statCounts').innerText = counts.length;
+        statsGrid.style.display = 'grid';
+
+        // Disparar descarga JSON
+        const exportPayload = {
+          app: 'Talca Expedición',
+          exportedAt: new Date().toISOString(),
+          source: 'Firestore Server Direct Export',
+          data: fullDatabase
+        };
+
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10);
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+        a.href = url;
+        a.download = `talca_firestore_${dateStr}_${timeStr}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        statusArea.innerHTML = `<div class="success-box"><b>¡Descarga completada con éxito!</b><br>Se descargó el archivo JSON con ${orders.length} órdenes y ${movements.length} movimientos de Firestore.</div>`;
+        btn.textContent = '✅ Base de datos descargada';
+        btn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        btn.disabled = false;
+        btn.textContent = '📥 Reintentar descarga';
+
+        let isQuota = err && (String(err.message || '').includes('quota') || String(err.message || '').includes('429') || String(err.code || '').includes('resource-exhausted'));
+        if (isQuota) {
+          statusArea.innerHTML = `
+            <div class="warning-box">
+              <b>⚠️ Cuota diaria de Firebase agotada (Error 429 - Resource Exhausted)</b><br>
+              El servidor de Firebase tiene bloqueadas las lecturas hasta el reinicio diario (04:00 AM hora argentina).<br><br>
+              <b>Alternativa inmediata:</b> Abre la aplicación en la PC principal del trabajo donde sí están los movimientos cargados y pulsa en <b>Copias de seguridad &gt; Descargar respaldo</b>.
+            </div>`;
+        } else {
+          statusArea.innerHTML = `
+            <div class="warning-box">
+              <b>Error al descargar de Firestore:</b><br>${err.message || err}
+            </div>`;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
