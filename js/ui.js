@@ -269,9 +269,173 @@ function openPendingEditorV1(pid){let p=db.products.find(x=>x.id===pid),b=v1Ensu
 function savePendingV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBucket(pid),before=JSON.parse(JSON.stringify(b));['preventa','distriC','distriInterior','sinCodificar','oesteMendoza','oesteJeremias'].forEach(k=>{b[k]=normalize(document.getElementById(k+'Pack').value,document.getElementById(k+'Unit').value,p).total});audit('Modificación','Pendientes',pid,JSON.stringify({before,after:b,note:document.getElementById('v1PendingNote').value}));save();closeModal();renderStockV1()}
 
 function exportStockV1CSV(){let rows=[['Código','Producto','Stock físico','Preventa','Distri C','Distri Interior','Sin codificar','Oeste Mendoza','Oeste Jeremías','Total pendiente','% disponible']];(db.products||[]).filter(p=>p.active!==false).forEach(p=>{let b=v1EnsureBucket(p.id),t=v1PendingTotal(b);rows.push([p.id,p.name,equivalent(b.physical,p),equivalent(b.preventa,p),equivalent(b.distriC,p),equivalent(b.distriInterior,p),equivalent(b.sinCodificar,p),equivalent(b.oesteMendoza,p),equivalent(b.oesteJeremias,p),equivalent(t,p),v1Pct(b).toFixed(1)+'%'])});downloadCSV('stock_y_pendientes.csv',rows)}
-function exportBackupV1(){let payload={app:'Talca Expedición',schemaVersion:V1_SCHEMA_VERSION,exportedAt:new Date().toISOString(),data:db},a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));a.download='talca_backup_'+new Date().toISOString().replaceAll(':','-')+'.json';a.click();URL.revokeObjectURL(a.href)}
-function importBackupV1(input){let file=input.files?.[0];if(!file)return;let r=new FileReader();r.onload=()=>{try{let payload=JSON.parse(r.result),data=payload.data||payload;if(!data.products||!data.stock)throw new Error('Formato inválido');v1Backup('Antes de importar respaldo');db=data;v1Migrate();save();alert('Respaldo importado correctamente')}catch(e){alert('No se pudo importar: '+e.message)}};r.readAsText(file)}
-function showBackupManagerV1(){let arr=[];try{arr=JSON.parse(v1SafeGet('talcaExpBackups')||'[]')}catch(e){};modal(`<div class="headrow"><div><h2>Copias de seguridad</h2><div class="muted">La migración a v1.0 crea un respaldo automático.</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div><div class="toolbar"><button class="btn btn-primary" onclick="exportBackupV1()">Descargar respaldo</button><label class="btn btn-secondary">Importar respaldo<input type="file" accept=".json" hidden onchange="importBackupV1(this)"></label></div><div style="margin-top:16px">${arr.length?arr.slice().reverse().map(b=>`<div class="card" style="margin-bottom:8px"><b>${b.label}</b><br><span class="muted">${fmtDate(b.date)}</span></div>`).join(''):'<span class="muted">No hay respaldos automáticos.</span>'}</div>` )}
+function exportBackupV1(){
+  let payload={
+    app: 'Talca Expedición',
+    schemaVersion: window.V16_SCHEMA_VERSION || 7,
+    exportedAt: new Date().toISOString(),
+    movementsCount: (db.movements || []).length,
+    ordersCount: (db.orders || []).length,
+    data: db
+  };
+  let a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  let now = new Date();
+  let dateStr = now.toISOString().slice(0, 10);
+  let timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+  a.download = `talca_backup_${dateStr}_${timeStr}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  v1Backup(`Respaldo descargado (${dateStr} ${timeStr})`);
+  if (typeof toast === 'function') toast('Copia de seguridad descargada correctamente.', 'success');
+  else alert('Copia de seguridad descargada correctamente.');
+}
+window.exportBackupV1 = exportBackupV1;
+
+function importBackupV1(input, mode = 'merge'){
+  let file = input.files?.[0];
+  if (!file) return;
+  let r = new FileReader();
+  r.onload = () => {
+    try {
+      let payload = JSON.parse(r.result);
+      let incoming = payload.data || payload;
+      if (!incoming || (!incoming.stock && !incoming.orders && !incoming.products)) {
+        throw new Error('El archivo no contiene un formato válido de base de datos de Talca Expedición.');
+      }
+
+      v1Backup('Antes de importar archivo');
+
+      // Purga de integridad previa en incoming
+      ['orders', 'movements', 'materialMoves', 'counts', 'audit'].forEach(col => {
+        if (Array.isArray(incoming[col])) {
+          incoming[col] = incoming[col].filter(x => x && x.id && x.id !== 'undefined' && !x._deleted);
+        }
+      });
+
+      if (mode === 'replace') {
+        db = incoming;
+      } else {
+        // Modo Fusión / Merge inteligente (no duplica y preserva lo más completo)
+        let moveMap = new Map((db.movements || []).map(m => [m.id, m]));
+        (incoming.movements || []).forEach(m => moveMap.set(m.id, m));
+        db.movements = Array.from(moveMap.values()).sort((a,b) => (a.date||'') > (b.date||'') ? 1 : ((a.date||'') < (b.date||'') ? -1 : 0));
+
+        let orderMap = new Map((db.orders || []).map(o => [o.id, o]));
+        (incoming.orders || []).forEach(o => {
+          let existing = orderMap.get(o.id);
+          if (!existing) {
+            orderMap.set(o.id, o);
+          } else {
+            if ((o.deliveries || []).length >= (existing.deliveries || []).length) {
+              orderMap.set(o.id, o);
+            }
+          }
+        });
+        db.orders = Array.from(orderMap.values());
+
+        let matMap = new Map((db.materialMoves || []).map(m => [m.id, m]));
+        (incoming.materialMoves || []).forEach(m => matMap.set(m.id, m));
+        db.materialMoves = Array.from(matMap.values());
+
+        let cntMap = new Map((db.counts || []).map(c => [c.id, c]));
+        (incoming.counts || []).forEach(c => cntMap.set(c.id, c));
+        db.counts = Array.from(cntMap.values());
+
+        let audMap = new Map((db.audit || []).map(a => [a.id, a]));
+        (incoming.audit || []).forEach(a => audMap.set(a.id, a));
+        db.audit = Array.from(audMap.values()).slice(-100);
+
+        if (incoming.stock && Object.keys(incoming.stock).length > 0) {
+          db.stock = Object.assign({}, db.stock, incoming.stock);
+        }
+        if (incoming.stockBuckets) {
+          db.stockBuckets = Object.assign({}, db.stockBuckets, incoming.stockBuckets);
+        }
+        if (incoming.fleteros && incoming.fleteros.length >= 10) {
+          db.fleteros = incoming.fleteros;
+        }
+        if (incoming.employees && incoming.employees.length > 0) {
+          db.employees = incoming.employees;
+        }
+      }
+
+      if (typeof autoReconcileDispatchedOrders === 'function') autoReconcileDispatchedOrders();
+      if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
+      safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+      safeSet(localStorage, 'talcaExp_last_valid_backup', JSON.stringify(db));
+
+      if (typeof save === 'function') save();
+      if (typeof renderAll === 'function') renderAll();
+      if (typeof closeModal === 'function') closeModal();
+
+      let msg = `Respaldo ${mode === 'replace' ? 'restaurado' : 'fusionado'} con éxito (${(db.movements||[]).length} movimientos, ${(db.orders||[]).length} órdenes en memoria).`;
+      if (typeof toast === 'function') toast(msg, 'success');
+      else alert(msg);
+    } catch(e) {
+      console.error(e);
+      alert('No se pudo importar: ' + e.message);
+    }
+  };
+  r.readAsText(file);
+}
+window.importBackupV1 = importBackupV1;
+
+function showBackupManagerV1(){
+  let arr = [];
+  try { arr = JSON.parse(v1SafeGet('talcaExpBackups') || '[]'); } catch(e){}
+  let movesCount = (db.movements || []).length;
+  let ordersCount = (db.orders || []).length;
+
+  modal(`<div class="headrow">
+    <div>
+      <h2>Centro de Copias de Seguridad</h2>
+      <div class="muted">Respaldos locales en este equipo y sincronización offline entre computadoras.</div>
+    </div>
+    <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
+  </div>
+  
+  <div class="card" style="margin-top:14px;background:var(--card);border-left:4px solid var(--primary);">
+    <b>Estado local de este equipo:</b>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:14px;flex-wrap:wrap;">
+      <span>📦 <b>${movesCount}</b> movimientos en memoria</span>
+      <span>📋 <b>${ordersCount}</b> órdenes cargadas</span>
+      <span>⏰ Sesión: <b>${session?.user || 'Usuario'} (${session?.shift || 'Turno'})</b></span>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
+    <div class="card" style="text-align:center;padding:16px;">
+      <h3 style="margin-top:0;">Exportar datos</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Descarga un archivo con todos los movimientos, órdenes y stock de esta PC.</p>
+      <button class="btn btn-primary" style="width:100%;" onclick="exportBackupV1()">📥 Descargar respaldo (.json)</button>
+    </div>
+
+    <div class="card" style="text-align:center;padding:16px;">
+      <h3 style="margin-top:0;">Importar y sincronizar</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Carga un respaldo de otra PC para sincronizar sin usar cuota de Firebase.</p>
+      <label class="btn btn-secondary" style="width:100%;display:inline-block;cursor:pointer;padding:9px 0;">
+        📤 Seleccionar respaldo (.json)
+        <input type="file" accept=".json" hidden onchange="importBackupV1(this, 'merge')">
+      </label>
+    </div>
+  </div>
+
+  <div style="margin-top:18px;">
+    <h3>Respaldos automáticos recientes en este navegador</h3>
+    <div style="max-height:160px;overflow-y:auto;margin-top:8px;">
+      ${arr.length ? arr.slice().reverse().map(b=>`
+        <div class="card" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;">
+          <div>
+            <b>${v14Text(b.label)}</b><br>
+            <span class="muted" style="font-size:12px;">${fmtDate(b.date)}</span>
+          </div>
+        </div>
+      `).join('') : '<span class="muted">No hay respaldos automáticos registrados aún en este equipo.</span>'}
+    </div>
+  </div>`);
+}
+window.showBackupManagerV1 = showBackupManagerV1;
 
 
 

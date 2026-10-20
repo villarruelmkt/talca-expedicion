@@ -128,6 +128,7 @@ window.addEventListener('unhandledrejection', function(event) {
     <button class="card quick" onclick="showPage('counts')"><strong>Conteo de turno</strong><small>Cierre, apertura y ajuste.</small></button>
     <button class="card quick" onclick="generateShiftSummary()"><strong>Resumen de turno</strong><small>Generar e imprimir el reporte operativo.</small></button>
     <button class="card quick" onclick="openConsumptionSummaryModal()"><strong>Resumen de consumos</strong><small>Empleados, anticipos e interno.</small></button>
+    <button class="card quick" onclick="showBackupManagerV1()"><strong>Copias de seguridad</strong><small>Descargar o sincronizar respaldo local.</small></button>
   </div>
   <div class="card" style="margin-top:18px">
     <div class="headrow"><h2>Actividad reciente</h2></div><div id="recent"></div>
@@ -243,7 +244,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 
 
-<script src="app.min.js?v=49" charset="utf-8"></script>
+<script src="app.min.js?v=50" charset="utf-8"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
