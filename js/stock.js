@@ -74,7 +74,15 @@ function saveTransfer(){
  if(!tRemit.value.trim())return toast('El número de remito es obligatorio.', 'error');
  let type=(tDirection.value==='in'?'Recepción desde ':'Envío a ')+tProvince.value,ref='Remito '+tRemit.value;
  let dStr=document.getElementById('tDate').value, opDate=dStr?new Date(dStr+'T12:00:00').toISOString():now();
- [...document.querySelectorAll('#movementLines .line')].forEach(r=>{let p=db.products.find(x=>x.id===r.querySelector('.mvProd').value),n=normalize(r.querySelector('.mvPack').value,r.querySelector('.mvUnit').value,p);if(n.total)addStockMove({type,ref,productId:p.id,total:n.total,dir:tDirection.value,date:opDate})});
+ let op = uid('trf');
+ [...document.querySelectorAll('#movementLines .line')].forEach(r=>{
+   let p=db.products.find(x=>x.id===r.querySelector('.mvProd').value),
+       n=normalize(r.querySelector('.mvPack').value,r.querySelector('.mvUnit').value,p);
+   if(n.total) {
+     addStockMove({type,ref,productId:p.id,total:n.total,dir:tDirection.value,date:opDate});
+     db.movements[db.movements.length-1].operationId = op;
+   }
+ });
  addMaterialMove({fleteroId:tCarrier.value,ref,source:type,palletOut:tPalletOut.value,palletIn:tPalletIn.value,chapOut:tChapOut.value,chapIn:tChapIn.value,date:opDate});
  save();closeModal()
 }

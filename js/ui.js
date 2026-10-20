@@ -1971,7 +1971,7 @@ function v16BaseMovementType(type){
 function v16IsGroupedMovement(m){
   let t=v16BaseMovementType(m.type);
   return Boolean(m.operationId||m.receiptNumber)||
-    ['Orden de carga','Rebote','Derrame','Consumo de empleado','Anticipo empleado'].includes(t);
+    ['Orden de carga','Rebote','Derrame','Consumo de empleado','Anticipo empleado','Recepción desde Mendoza','Recepción desde San Juan','Envío a Mendoza','Envío a San Juan','Transferencia'].includes(t);
 }
 function v16FallbackGroupKey(m){
   let t=v16BaseMovementType(m.type);

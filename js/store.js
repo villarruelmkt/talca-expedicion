@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 44;
+const APP_BUILD_VERSION = 45;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -84,7 +84,7 @@ let hasCollectionsInitialSync = {
 };
 let lastCloudUpdatedAt = null;
 
-function getSyncCutoffDateISO(days = 15) {
+function getSyncCutoffDateISO(days = 5) {
   let d = new Date();
   d.setDate(d.getDate() - days);
   d.setHours(0, 0, 0, 0);
@@ -277,14 +277,14 @@ docRef.onSnapshot((doc) => {
 });
 
 function setupCollectionListeners() {
-  const cutoff15d = getSyncCutoffDateISO(15);
-  const cutoff30d = getSyncCutoffDateISO(30);
+  const cutoff5d = getSyncCutoffDateISO(5);
+  const cutoff10d = getSyncCutoffDateISO(10);
 
   const configs = [
-    { col: 'orders', query: firestoreDb.collection('orders').where('date', '>=', cutoff15d) },
-    { col: 'movements', query: firestoreDb.collection('movements').where('date', '>=', cutoff15d) },
-    { col: 'materialMoves', query: firestoreDb.collection('materialMoves').where('date', '>=', cutoff15d) },
-    { col: 'counts', query: firestoreDb.collection('counts').where('date', '>=', cutoff30d) }
+    { col: 'orders', query: firestoreDb.collection('orders').where('date', '>=', cutoff10d) },
+    { col: 'movements', query: firestoreDb.collection('movements').where('date', '>=', cutoff5d) },
+    { col: 'materialMoves', query: firestoreDb.collection('materialMoves').where('date', '>=', cutoff5d) },
+    { col: 'counts', query: firestoreDb.collection('counts').where('date', '>=', cutoff10d) }
   ];
 
   let syncBatchTimer = null;
@@ -446,22 +446,23 @@ function save(){
      return;
    }
 
-    const cutoff15d = getSyncCutoffDateISO(15);
+    const cutoffSync = getSyncCutoffDateISO(5);
     // Diff & Sync: Solo subimos a colecciones los items modificados o nuevos
     ['orders', 'movements', 'materialMoves', 'counts'].forEach(col => {
        // Blindaje: NUNCA subir a Firestore si esta colección específica no ha recibido su primer snapshot de la nube
        if (!hasCollectionsInitialSync[col]) {
           return;
        }
+       const colCutoff = getSyncCutoffDateISO(col === 'orders' ? 10 : 5);
        let currentIds = new Set();
        (db[col] || []).forEach(item => {
           if (!item.id) return;
           currentIds.add(item.id);
 
-          // Blindaje histórico: Si el item es anterior a los últimos 15 días y no está registrado en lastSyncedDb,
+          // Blindaje histórico: Si el item es anterior al cutoff y no está registrado en lastSyncedDb,
           // proviene del historial local de localStorage. Lo registramos en lastSyncedDb para evitar re-subir
           // documentos antiguos a Firestore innecesariamente, sin computar hash.
-          if (!lastSyncedDb[col].has(item.id) && item.date && item.date < cutoff15d) {
+          if (!lastSyncedDb[col].has(item.id) && item.date && item.date < colCutoff) {
              lastSyncedDb[col].set(item.id, '__HISTORICAL_LOCAL__');
              return;
           }

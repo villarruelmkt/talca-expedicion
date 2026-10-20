@@ -11,7 +11,15 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const firestoreDb = firebase.firestore();
 try {
-  firestoreDb.enablePersistence().catch(e => console.warn('Persistence error:', e));
+  firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(e => {
+    if (e.code === 'failed-precondition') {
+      console.warn('Persistencia: Múltiples pestañas abiertas sin soporte sincronizado:', e);
+    } else if (e.code === 'unimplemented') {
+      console.warn('Persistencia: El navegador no soporta IndexedDB para Firestore:', e);
+    } else {
+      console.warn('Persistence error:', e);
+    }
+  });
 } catch(e) {
   console.warn('Sync persistence error:', e);
 }

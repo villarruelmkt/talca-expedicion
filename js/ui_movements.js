@@ -8,6 +8,7 @@ function v16GroupedMovements(){
     if(!v16IsGroupedMovement(m)){
       output.push({
         key:`SINGLE|${m.id}`,
+        id:m.id,
         date:m.date,type:m.type,ref:m.ref||'',user:m.user||'',shift:m.shift||'',
         input:(m.dir==='in'?v16MovementFardos(m):0),
         output:(m.dir==='out'?v16MovementFardos(m):0),
@@ -20,7 +21,7 @@ function v16GroupedMovements(){
     let key=v16MovementGroupKey(m);
     if(!map.has(key)){
       map.set(key,{
-        key,date:m.operationDate||m.date,
+        key,id:m.id,date:m.operationDate||m.date,
         type:v16BaseMovementType(m.type),ref:m.ref||'',
         user:m.user||'',shift:m.shift||'',
         input:0,output:0,neutral:0,count:0,grouped:true
@@ -57,7 +58,16 @@ function renderMovementsV16(){
   if (fromD) list = list.filter(g => g.date >= fromD);
   if (toD) list = list.filter(g => g.date <= toD + 'T23:59:59');
   if (t === 'Producción') {
-    list = list.filter(g => g.type === 'Producción' || g.type === 'Producción sin codificar');
+    list = list.filter(g => (g.type === 'Producción' || g.type === 'Producción sin codificar') && !String(g.ref || '').toLowerCase().includes('mendoza'));
+  } else if (t === 'Producción Mendoza' || t === 'Mendoza') {
+    list = list.filter(g => {
+      let typeNorm = String(g.type || '').toLowerCase();
+      let refNorm = String(g.ref || '').toLowerCase();
+      let isMendoza = typeNorm.includes('mendoza');
+      let isIncoming = isMendoza && (g.input > 0 || typeNorm.includes('recep') || typeNorm.includes('ingreso') || typeNorm.includes('produc'));
+      let isProdMendoza = typeNorm.includes('produc') && refNorm.includes('mendoza');
+      return isIncoming || isProdMendoza;
+    });
   } else if (t) {
     list = list.filter(g => g.type === t);
   }
@@ -97,7 +107,8 @@ window.clearMovFilters = function() {
 function editMovement(id) {
   let m = db.movements.find(x => x.id === id);
   if (!m) return;
-  let groupedMoves = m.operationId ? db.movements.filter(x => x.operationId === m.operationId) : [m];
+  let groupedMoves = m.operationId ? db.movements.filter(x => x.operationId === m.operationId) : db.movements.filter(x => x.type === m.type && x.ref === m.ref && String(x.date).slice(0, 19) === String(m.date).slice(0, 19));
+  if (!groupedMoves.length) groupedMoves = [m];
   
   let lines = groupedMoves.map(move => {
     let p = db.products.find(x => x.id === move.productId);
@@ -131,7 +142,8 @@ function saveEditMovement(id) {
   
   let newDate = newDateStr ? new Date(newDateStr + 'T12:00:00').toISOString() : m.date;
   
-  let groupedMoves = m.operationId ? db.movements.filter(x => x.operationId === m.operationId) : [m];
+  let groupedMoves = m.operationId ? db.movements.filter(x => x.operationId === m.operationId) : db.movements.filter(x => x.type === m.type && x.ref === m.ref && String(x.date).slice(0, 19) === String(m.date).slice(0, 19));
+  if (!groupedMoves.length) groupedMoves = [m];
   groupedMoves.forEach(move => {
     move.date = newDate;
     move.ref = newRef;
