@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 46;
+const APP_BUILD_VERSION = 47;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -75,8 +75,21 @@ function isAuthorizedWriter(userObjOrName) {
   let norm = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   return norm.includes('pablo') || norm.includes('villarruel') || norm.includes('pvillarruel') ||
          norm.includes('raul') || norm.includes('araoz') || norm.includes('raraoz') ||
-         norm.includes('andres') || norm.includes('guaymas') || norm.includes('aguaymas');
+         norm.includes('andres') || norm.includes('guaymas') || norm.includes('aguaymas') ||
+         norm.includes('monica') || norm.includes('jimenez') || norm.includes('mjimenez');
 }
+
+function isUserMonica(userObjOrName) {
+  if (!userObjOrName) return false;
+  let name = '';
+  if (typeof userObjOrName === 'string') name = userObjOrName;
+  else if (typeof userObjOrName === 'object') {
+    name = `${userObjOrName.username || ''} ${userObjOrName.displayName || ''} ${userObjOrName.user || ''}`;
+  }
+  let norm = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return norm.includes('monica') || norm.includes('jimenez') || norm.includes('mjimenez');
+}
+window.isUserMonica = isUserMonica;
 
 // Bloqueo de acceso a Movimientos y Auditoría para Andrés y Raúl (prevención de lecturas masivas accidentales)
 function isUserRestrictedFromAuditAndMovements(userObjOrName) {
@@ -450,10 +463,14 @@ function syncMovementsOnDemand(force = false) {
     movementsBody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:#6b7280;">Sincronizando últimos movimientos desde la nube...</td></tr>';
   }
 
-  firestoreDb.collection('movements')
-    .orderBy('date', 'desc')
-    .limit(100)
-    .get()
+  let query = firestoreDb.collection('movements').orderBy('date', 'desc');
+  // Sin restricción de límite para el usuario Monica
+  let isMonica = typeof isUserMonica === 'function' && isUserMonica(session);
+  if (!isMonica) {
+    query = query.limit(100);
+  }
+
+  query.get()
     .then(snap => {
       isMovementsFetching = false;
       let remoteItems = [];
@@ -760,7 +777,7 @@ document.addEventListener('DOMContentLoaded',()=>{
      if (isAction && !isWhitelisted) {
        e.stopPropagation();
        e.preventDefault();
-       alert('Acceso restringido: Tu usuario está configurado en modo SOLO LECTURA. Solo Andrés Guaymas, Raúl Araoz y Pablo Villarruel tienen permisos de modificación.');
+       alert('Acceso restringido: Tu usuario está configurado en modo SOLO LECTURA. Solo usuarios autorizados tienen permisos de modificación.');
        return;
      }
    }

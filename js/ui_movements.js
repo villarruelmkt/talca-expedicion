@@ -74,10 +74,26 @@ function renderMovementsV16(){
 
   let totalCount = list.length;
   let isCapped = false;
-  if (!fromD && !toD && !t && list.length > 200) {
+  let isMonica = typeof isUserMonica === 'function' && isUserMonica(session);
+  if (!isMonica && !fromD && !toD && !t && list.length > 200) {
     list = list.slice(0, 200);
     isCapped = true;
   }
+
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:16px;">No hay movimientos registrados para los filtros seleccionados.</td></tr>';
+    return;
+  }
+
+  // Cálculo de totales para el totalizado final (Entrada, Salida, Sin impacto)
+  let totalInput = 0;
+  let totalOutput = 0;
+  let totalNeutral = 0;
+  list.forEach(g => {
+    totalInput += (Number(g.input) || 0);
+    totalOutput += (Number(g.output) || 0);
+    totalNeutral += (Number(g.neutral) || 0);
+  });
 
   let rowsHtml = list.map(g=>`<tr>
     <td>${fmtDate(g.date)}</td>
@@ -95,7 +111,18 @@ function renderMovementsV16(){
     rowsHtml += `<tr><td colspan="9" style="text-align:center;background:var(--card);color:var(--muted);padding:10px;font-size:13px;font-weight:bold;">Mostrando los 200 movimientos más recientes de ${totalCount}. Utilice los filtros 'Desde', 'Hasta' o 'Tipo' para ver operaciones anteriores.</td></tr>`;
   }
 
-  body.innerHTML = rowsHtml || '<tr><td colspan="9" class="muted">No hay movimientos registrados.</td></tr>';
+  let totalRowHtml = `<tr class="v16-movements-total" style="font-weight:bold;background:#eef2ff;border-top:2px solid #19417f;border-bottom:2px solid #19417f;">
+    <td colspan="3" style="font-weight:bold;text-align:left;padding:8px 10px;">TOTALIZADO FINAL (${list.length} ${list.length === 1 ? 'operación' : 'operaciones'}${isCapped ? ' mostradas' : ''})</td>
+    <td style="font-weight:bold;color:#059669;padding:8px 10px;">${totalInput ? v16FmtFardos(totalInput) : '-'}</td>
+    <td style="font-weight:bold;color:#dc2626;padding:8px 10px;">${totalOutput ? v16FmtFardos(totalOutput) : '-'}</td>
+    <td style="font-weight:bold;color:#4b5563;padding:8px 10px;">${totalNeutral ? v16FmtFardos(totalNeutral) : '-'}</td>
+    <td colspan="2" style="font-size:11px;color:#6b7280;vertical-align:middle;padding:8px 10px;">Total consolidado</td>
+    <td class="no-print"></td>
+  </tr>`;
+
+  rowsHtml += totalRowHtml;
+
+  body.innerHTML = rowsHtml;
 }
 
 window.clearMovFilters = function() {

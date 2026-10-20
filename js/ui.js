@@ -2197,6 +2197,17 @@ printSection=function(id,title){
     extraStyle='<style>@page{margin:10mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:4px 6px!important;} #printArea .v16-stock-name{font-weight:bold;font-size:12px;}</style>';
     headerHtml=`<div style="margin-bottom:12px;font-size:13px;color:#333;"><b>Impreso:</b> ${fmtDate(now())} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(session.user)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(session.shift)}</div>`;
   }
+  if(id==='movements'){
+    let fFrom = document.getElementById('movFrom')?.value || 'Todas';
+    let fTo = document.getElementById('movTo')?.value || 'Todas';
+    let fTypeEl = document.getElementById('movType');
+    let fType = fTypeEl ? (fTypeEl.options[fTypeEl.selectedIndex]?.text || fTypeEl.value || 'Todos') : 'Todos';
+    let userStr = (session && (session.user?.displayName || session.user?.username || session.user)) || 'Usuario';
+    let shiftStr = (session && session.shift) || '-';
+
+    extraStyle='<style>@page{size:A4 landscape;margin:8mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:5px 6px!important;} #printArea .v16-movements-total td{background-color:#eef2ff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;font-weight:bold!important;border-top:2px solid #19417f!important;border-bottom:2px solid #19417f!important;font-size:11.5px!important;}</style>';
+    headerHtml=`<div style="margin-bottom:12px;font-size:12px;color:#333;background:#f5f5f5;padding:6px 10px;border-radius:4px;border:1px solid #ddd;"><b>Filtros aplicados:</b> &nbsp; <b>Desde:</b> ${v14Text(fFrom)} &nbsp;·&nbsp; <b>Hasta:</b> ${v14Text(fTo)} &nbsp;·&nbsp; <b>Tipo:</b> ${v14Text(fType)} &nbsp;·&nbsp; <b>Impreso:</b> ${fmtDate(now())} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(userStr)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(shiftStr)}</div>`;
+  }
   if(id==='orders'){
     let fCarrier = document.getElementById('ofCarrier')?.value;
     let fCarrierText = fCarrier ? ((db.fleteros||[]).find(f => f.id === fCarrier)?.name || fCarrier) : 'Todos';

@@ -548,6 +548,16 @@ table{font-variant-numeric:tabular-nums}
   #materialsTotals .summarygrid{grid-template-columns:1fr!important}
 }
 
+.v16-movements-total {
+  font-weight: bold;
+  background-color: #eef2ff;
+  border-top: 2px solid var(--brand);
+  border-bottom: 2px solid var(--brand);
+}
+.v16-movements-total td {
+  font-weight: bold !important;
+}
+
 /* Un único modelo de impresión: sólo #printArea */
 @media print{
   @page{size:A4 portrait;margin:8mm}
