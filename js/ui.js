@@ -44,6 +44,7 @@ function getActivePageId() {
 
 function renderAll(forceAll = false){
  if(!session)return;
+ if (typeof updateNavigationRestrictions === 'function') updateNavigationRestrictions();
  populateFilters();
  let today=new Date().toISOString().slice(0,10);
  

@@ -63,7 +63,7 @@ applyVerifiedStockV38();
 
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 45;
+const APP_BUILD_VERSION = 46;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -78,9 +78,23 @@ function isAuthorizedWriter(userObjOrName) {
          norm.includes('andres') || norm.includes('guaymas') || norm.includes('aguaymas');
 }
 
+// Bloqueo de acceso a Movimientos y Auditoría para Andrés y Raúl (prevención de lecturas masivas accidentales)
+function isUserRestrictedFromAuditAndMovements(userObjOrName) {
+  if (!userObjOrName) return false;
+  let name = '';
+  if (typeof userObjOrName === 'string') name = userObjOrName;
+  else if (typeof userObjOrName === 'object') {
+    name = `${userObjOrName.username || ''} ${userObjOrName.displayName || ''} ${userObjOrName.user || ''}`;
+  }
+  let norm = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return norm.includes('raul') || norm.includes('araoz') || norm.includes('raraoz') ||
+         norm.includes('andres') || norm.includes('guaymas') || norm.includes('aguaymas');
+}
+window.isUserRestrictedFromAuditAndMovements = isUserRestrictedFromAuditAndMovements;
+
 let hasInitialCloudSync = false;
 let hasCollectionsInitialSync = {
-  orders: false, movements: false, audit: true, materialMoves: false, counts: false
+  orders: false, movements: true, audit: true, materialMoves: false, counts: false
 };
 let lastCloudUpdatedAt = null;
 
@@ -282,7 +296,6 @@ function setupCollectionListeners() {
 
   const configs = [
     { col: 'orders', query: firestoreDb.collection('orders').where('date', '>=', cutoff10d) },
-    { col: 'movements', query: firestoreDb.collection('movements').where('date', '>=', cutoff5d) },
     { col: 'materialMoves', query: firestoreDb.collection('materialMoves').where('date', '>=', cutoff5d) },
     { col: 'counts', query: firestoreDb.collection('counts').where('date', '>=', cutoff10d) }
   ];
@@ -367,6 +380,10 @@ let lastAuditFetchTime = 0;
 let isAuditFetching = false;
 function syncAuditOnDemand(force = false) {
   if (!isFirebaseReady || !firestoreDb) return;
+  // Bloquear lecturas para Andrés y Raúl
+  if (isUserRestrictedFromAuditAndMovements(session)) {
+    return;
+  }
   let nowTime = Date.now();
   if (!force && (nowTime - lastAuditFetchTime < 30000)) {
     return;
@@ -411,6 +428,60 @@ function syncAuditOnDemand(force = false) {
     });
 }
 window.syncAuditOnDemand = syncAuditOnDemand;
+
+let lastMovementsFetchTime = 0;
+let isMovementsFetching = false;
+function syncMovementsOnDemand(force = false) {
+  if (!isFirebaseReady || !firestoreDb) return;
+  // Bloquear lecturas para Andrés y Raúl
+  if (isUserRestrictedFromAuditAndMovements(session)) {
+    return;
+  }
+  let nowTime = Date.now();
+  if (!force && (nowTime - lastMovementsFetchTime < 30000)) {
+    return;
+  }
+  if (isMovementsFetching) return;
+  isMovementsFetching = true;
+  lastMovementsFetchTime = nowTime;
+
+  let movementsBody = document.getElementById('movementsBody');
+  if (movementsBody && (!db.movements || db.movements.length === 0)) {
+    movementsBody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:#6b7280;">Sincronizando últimos movimientos desde la nube...</td></tr>';
+  }
+
+  firestoreDb.collection('movements')
+    .orderBy('date', 'desc')
+    .limit(100)
+    .get()
+    .then(snap => {
+      isMovementsFetching = false;
+      let remoteItems = [];
+      snap.forEach(doc => {
+        let data = doc.data();
+        if (data && !data._deleted) {
+          remoteItems.push(data);
+          lastSyncedDb.movements.set(data.id, fastHash(data));
+        }
+      });
+      if (remoteItems.length > 0) {
+        let map = new Map((db.movements || []).map(x => [x.id, x]));
+        remoteItems.forEach(x => map.set(x.id, x));
+        db.movements = Array.from(map.values()).sort((a,b) => (a.date||'') > (b.date||'') ? 1 : ((a.date||'') < (b.date||'') ? -1 : 0));
+        safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
+        if (typeof renderMovementsV16 === 'function') renderMovementsV16();
+        if (force && typeof toast === 'function') toast('Movimientos sincronizados con la nube (últimos 100).', 'success');
+      } else if (force && typeof toast === 'function') {
+        toast('No se encontraron nuevos movimientos en la nube.', 'info');
+      }
+    })
+    .catch(err => {
+      isMovementsFetching = false;
+      console.warn('Alerta Firestore: Error al sincronizar movimientos bajo demanda:', err);
+      if (force && typeof toast === 'function') toast('Error al consultar movimientos en la nube.', 'error');
+    });
+}
+window.syncMovementsOnDemand = syncMovementsOnDemand;
 
 // Blindaje contra saturación de cuota:
 // Se eliminó la re-escritura masiva de colecciones a los 5 segundos que provocaba agotamiento de cuota diaria (Error 429).
@@ -622,6 +693,17 @@ function changeShift(){
     start();
   };
 }
+function updateNavigationRestrictions() {
+  let isRestricted = isUserRestrictedFromAuditAndMovements(session);
+  document.querySelectorAll('.navbtn').forEach(btn => {
+    let page = btn.dataset.page;
+    if (page === 'movements' || page === 'audit') {
+      btn.style.display = isRestricted ? 'none' : '';
+    }
+  });
+}
+window.updateNavigationRestrictions = updateNavigationRestrictions;
+
 function start(){
   login.classList.add('hidden');
   app.classList.remove('hidden');
@@ -631,10 +713,19 @@ function start(){
     : ' <span style="background:#10b981;color:#fff;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;">ACCESO TOTAL</span>';
   sessionBadge.innerHTML = session.user + ' · ' + session.shift + roleBadge;
   todayText.textContent = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  updateNavigationRestrictions();
+  if (isUserRestrictedFromAuditAndMovements(session)) {
+    let activePage = document.querySelector('.page:not(.hidden)')?.id;
+    if (activePage === 'movements' || activePage === 'audit') {
+      showPage('dashboard');
+      return;
+    }
+  }
   renderAll();
 }
 document.addEventListener('DOMContentLoaded',()=>{
  fillLoginUsers();
+ updateNavigationRestrictions();
  let warning=document.getElementById('mobileFileWarning');
  if(warning&&location.protocol==='file:'&&/iPhone|iPad|iPod/i.test(navigator.userAgent))warning.classList.remove('hidden');
  if(session)start();
@@ -705,6 +796,14 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 document.querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
 function showPage(id){
+  if ((id === 'movements' || id === 'audit') && isUserRestrictedFromAuditAndMovements(session)) {
+    try {
+      if (typeof toast === 'function') toast('Acceso restringido: La pestaña de ' + (id === 'audit' ? 'auditoría' : 'movimientos') + ' está reservada para administración.', 'warning');
+      else alert('Acceso restringido: Esta pestaña está reservada para administración.');
+    } catch(e){}
+    showPage('dashboard');
+    return;
+  }
   if(id!=='employees'&&typeof currentPrintKind!=='undefined'&&currentPrintKind==='receipt'){
     currentPrintBody='';
     currentPrintTitle='';
@@ -716,6 +815,9 @@ function showPage(id){
   document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('active',x.dataset.page===id));
   if (id === 'audit') {
     syncAuditOnDemand();
+  }
+  if (id === 'movements') {
+    syncMovementsOnDemand();
   }
   renderAll();
 }
