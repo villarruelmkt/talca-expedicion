@@ -12,18 +12,32 @@
 <title>Talca Expedición v1.7</title>
 <script>
 window.onerror = function(msg, url, lineNo, columnNo, error) {
+  var errText = String(msg || '');
+  var stackText = error && error.stack ? String(error.stack) : '';
+  
+  // Ignorar errores internos no críticos de Firebase / SharedClientState / CORS
+  if (errText.includes('Script error') || stackText.includes('addPendingMutation') || stackText.includes('firebase') || stackText.includes('gstatic')) {
+    console.warn('Alerta interna capturada (ignorada en interfaz para no bloquear):', msg, error);
+    return true;
+  }
+
   var d = document.createElement('div');
-  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;z-index:9999;padding:20px;font-size:18px;font-family:sans-serif;box-shadow:0 4px 6px rgba(0,0,0,0.3);';
-  d.innerHTML = '<strong>ERROR:</strong> ' + msg + '<br>Línea: ' + lineNo + '<br><pre style="white-space:pre-wrap;font-size:14px;margin-top:10px;">' + (error ? error.stack : '') + '</pre>';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#dc2626;color:white;z-index:99999;padding:12px 18px;font-size:14px;font-family:sans-serif;box-shadow:0 4px 6px rgba(0,0,0,0.3);display:flex;justify-content:space-between;align-items:flex-start;';
+  d.innerHTML = '<div><strong>AVISO:</strong> ' + msg + '<br><small>Línea: ' + lineNo + '</small><pre style="white-space:pre-wrap;font-size:12px;margin-top:6px;max-height:100px;overflow-y:auto;">' + (error ? error.stack : '') + '</pre></div><button onclick="this.parentElement.remove()" style="background:#fff;color:#dc2626;border:0;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer;margin-left:12px;">✕ Cerrar</button>';
   if (document.body) document.body.appendChild(d);
   else document.addEventListener('DOMContentLoaded', () => document.body.appendChild(d));
   return false;
 };
 window.addEventListener('unhandledrejection', function(event) {
+  var reason = event.reason || '';
+  var trace = reason && reason.stack ? reason.stack : String(reason);
+  if (trace.includes('addPendingMutation') || trace.includes('firebase') || trace.includes('gstatic') || trace.includes('failed-precondition')) {
+    console.warn('Promesa de sincronización capturada (ignorada en interfaz):', reason);
+    return;
+  }
   var d = document.createElement('div');
-  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:darkred;color:white;z-index:9998;padding:20px;font-size:18px;font-family:sans-serif;box-shadow:0 4px 6px rgba(0,0,0,0.3);';
-  var trace = event.reason ? (event.reason.stack || event.reason) : '';
-  d.innerHTML = '<strong>UNHANDLED PROMISE:</strong><br><pre style="white-space:pre-wrap;font-size:14px;margin-top:10px;">' + trace + '</pre>';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#991b1b;color:white;z-index:99998;padding:12px 18px;font-size:14px;font-family:sans-serif;box-shadow:0 4px 6px rgba(0,0,0,0.3);display:flex;justify-content:space-between;align-items:flex-start;';
+  d.innerHTML = '<div><strong>ADVERTENCIA DEL SISTEMA:</strong><br><pre style="white-space:pre-wrap;font-size:12px;margin-top:6px;max-height:100px;overflow-y:auto;">' + trace + '</pre></div><button onclick="this.parentElement.remove()" style="background:#fff;color:#991b1b;border:0;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer;margin-left:12px;">✕ Cerrar</button>';
   if (document.body) document.body.appendChild(d);
   else document.addEventListener('DOMContentLoaded', () => document.body.appendChild(d));
 });
@@ -209,8 +223,8 @@ window.addEventListener('unhandledrejection', function(event) {
 
 <div id="modal" class="modal hidden"><div class="dialog" id="dialog"></div></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js" crossorigin="anonymous"></script>
 
 
 <div id="printArea"></div>
@@ -229,7 +243,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 
 
-<script src="app.min.js?v=47" charset="utf-8"></script>
+<script src="app.min.js?v=48" charset="utf-8"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
