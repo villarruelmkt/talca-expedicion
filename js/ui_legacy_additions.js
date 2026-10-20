@@ -64,18 +64,40 @@ window.v11PendingOptions = function v11PendingOptions(selected=''){
 window.v11IncreasePending = function v11IncreasePending(type,productId,total){if(!type||type==='immediate'||!total)return;let b=v1EnsureBucket(productId);b[type]=Number(b[type]||0)+Number(total||0)};
 window.v11DecreasePending = function v11DecreasePending(type,productId,total){if(!type||type==='immediate'||!total)return 0;let b=v1EnsureBucket(productId),applied=Math.min(Number(b[type]||0),Number(total||0));b[type]=Math.max(0,Number(b[type]||0)-applied);return applied};
 window.v11OrderRequested = function v11OrderRequested(o){return (o.requestLines||[]).reduce((s,l)=>s+Number(l.total||0),0)};
-window.v11OrderResolved = function v11OrderResolved(o){return (o.requestLines||[]).reduce((s,l)=>s+Math.min(Number(l.total||0),Number(l.resolvedTotal||0)),0)};
-window.v11OrderOutstanding = function v11OrderOutstanding(o){return Math.max(0,v11OrderRequested(o)-v11OrderResolved(o))};
+window.v11OrderResolved = function v11OrderResolved(o){
+  if(o.status==='Despachada'||o.status==='Completa')return v11OrderRequested(o);
+  let delMap = {};
+  (o.deliveries || []).forEach(d => {
+    (d.lines || []).forEach(l => {
+      let pid = l.sourceProductId || l.productId;
+      if (pid) delMap[pid] = (delMap[pid] || 0) + Number(l.total || 0);
+    });
+  });
+  return (o.requestLines||[]).reduce((s,l)=>{
+    let res = Number(l.resolvedTotal || 0);
+    let fromDel = delMap[l.productId] || 0;
+    return s + Math.min(Number(l.total||0), Math.max(res, fromDel));
+  }, 0);
+};
+window.v11OrderOutstanding = function v11OrderOutstanding(o){
+  if(o.status==='Despachada'||o.status==='Completa'||o.status==='Anulada')return 0;
+  return Math.max(0,v11OrderRequested(o)-v11OrderResolved(o));
+};
 window.v11DeliveredTotal = function v11DeliveredTotal(o){return (o.deliveries||[]).reduce((s,d)=>s+(d.lines||[]).reduce((a,l)=>a+Number(l.total||0),0),0)};
-window.v11LineOutstanding = function v11LineOutstanding(l){return Math.max(0,Number(l.total||0)-Number(l.resolvedTotal||0))};
+window.v11LineOutstanding = function v11LineOutstanding(l, o){
+  if(o && (o.status==='Despachada'||o.status==='Completa'||o.status==='Anulada'))return 0;
+  return Math.max(0,Number(l.total||0)-Number(l.resolvedTotal||0));
+};
 window.v11FindRequestLine = function v11FindRequestLine(o,sourceProductId){return (o.requestLines||[]).find(l=>l.productId===sourceProductId&&v11LineOutstanding(l)>0)||(o.requestLines||[]).find(l=>l.productId===sourceProductId)};
 window.v11OrderStatus = function v11OrderStatus(o){
- if(o.pendingType==='immediate')return o.status||'Despachada';
- let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o),sub=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));
- if(outstanding===0)return 'Despachada';
- if(sub)return 'Pendiente de Facturación';
- if(delivered>0)return 'Parcialmente despachada';
- return 'Pendiente de despacho'
+  if(o.pendingType==='cancelled'||o.status==='Anulada')return 'Anulada';
+  if(o.status==='Despachada'||o.status==='Completa')return 'Despachada';
+  if(o.pendingType==='immediate')return o.status||'Despachada';
+  let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o),sub=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));
+  if(outstanding===0)return 'Despachada';
+  if(sub)return 'Pendiente de Facturación';
+  if(delivered>0)return 'Parcialmente despachada';
+  return 'Pendiente de despacho';
 };
 window.v11ProductSelect = function v11ProductSelect(selected=''){return db.products.filter(p=>p.active!==false).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${p.id} · ${p.name}</option>`).join('')};
 

@@ -129,6 +129,86 @@
           if (!d._deleted) audit.push(d);
         });
 
+        log('7. Reconciliando órdenes despachadas y salidas de stock...');
+        let movesByRef = new Map();
+        movements.forEach(m => {
+          if (!m || m._deleted || m.dir !== 'out' || !m.ref) return;
+          if (!movesByRef.has(m.ref)) movesByRef.set(m.ref, []);
+          movesByRef.get(m.ref).push(m);
+        });
+
+        let STOCK_BASELINE_DATE = '2026-10-16T16:14:00.000Z';
+        orders.forEach(o => {
+          if (!o || !o.number || o._deleted) return;
+          let moves = movesByRef.get(o.number) || [];
+          let delCount = (o.deliveries || []).length;
+          let isModern = Array.isArray(o.requestLines) && o.requestLines.length > 0;
+
+          if (delCount > 0) {
+            let deliveredMap = {};
+            (o.deliveries || []).forEach(d => {
+              (d.lines || []).forEach(l => {
+                let pid = l.sourceProductId || l.productId;
+                if (pid) deliveredMap[pid] = (deliveredMap[pid] || 0) + Number(l.total || 0);
+              });
+            });
+
+            if (isModern) {
+              let reqTotal = o.requestLines.reduce((s, l) => s + Number(l.total || 0), 0);
+              (o.requestLines || []).forEach(l => {
+                let delQty = deliveredMap[l.productId] || 0;
+                if (o.status === 'Despachada' || o.status === 'Completa') {
+                  l.resolvedTotal = Number(l.total || 0);
+                } else if (delQty > 0) {
+                  l.resolvedTotal = Math.min(Number(l.total || 0), delQty);
+                }
+              });
+
+              let resTotal = o.requestLines.reduce((s, l) => s + Number(l.resolvedTotal || 0), 0);
+              let totalDelivered = Object.values(deliveredMap).reduce((s, v) => s + v, 0);
+
+              if ((reqTotal > 0 && resTotal >= reqTotal) || (reqTotal > 0 && totalDelivered >= reqTotal) || o.status === 'Despachada' || o.status === 'Completa') {
+                o.status = 'Despachada';
+                (o.requestLines || []).forEach(l => { l.resolvedTotal = Number(l.total || 0); });
+              } else if (resTotal > 0 || totalDelivered > 0) {
+                if (o.status !== 'Parcial' && o.status !== 'Parcialmente despachada') o.status = 'Parcial';
+              }
+            } else {
+              if (o.status === 'Completa' || o.status === 'Recibida') o.status = 'Despachada';
+            }
+
+            // Movimientos faltantes
+            let moveQtyByProd = {};
+            moves.forEach(m => {
+              moveQtyByProd[m.productId] = (moveQtyByProd[m.productId] || 0) + Number(m.total || 0);
+            });
+            Object.entries(deliveredMap).forEach(([pid, delTotal]) => {
+              let movedTotal = moveQtyByProd[pid] || 0;
+              let missing = delTotal - movedTotal;
+              if (missing > 0) {
+                let firstDel = o.deliveries[0] || {};
+                let moveDate = firstDel.date || o.date || new Date().toISOString();
+                let newMove = {
+                  id: 'm_' + Math.random().toString(36).slice(2, 9),
+                  type: 'Orden de carga',
+                  ref: o.number,
+                  productId: pid,
+                  total: missing,
+                  dir: 'out',
+                  date: moveDate,
+                  note: firstDel.note || 'Reconciliación de salida confirmada',
+                  user: firstDel.user || 'Encargado',
+                  shift: firstDel.shift || 'Mañana'
+                };
+                movements.push(newMove);
+                if (masterData.stock && moveDate > STOCK_BASELINE_DATE) {
+                  masterData.stock[pid] = Math.max(0, (Number(masterData.stock[pid]) || 0) - missing);
+                }
+              }
+            });
+          }
+        });
+
         // Construir base unificada compatible con Talca Expedición
         const fullDatabase = Object.assign({}, masterData, {
           orders: orders.sort((a,b) => (b.number || 0) - (a.number || 0)),

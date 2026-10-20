@@ -240,18 +240,67 @@ window.openStockAuditModal = function() {
 
   let discrepanciesCount = rows.filter(r => r.diff !== 0).length;
 
+  // Diagnóstico de órdenes y reservas
+  let unreconciledOrders = (db.orders || []).filter(o => {
+    if (!o || o._deleted) return false;
+    let delCount = (o.deliveries || []).length;
+    let isModern = Array.isArray(o.requestLines) && o.requestLines.length > 0;
+    let st = typeof v11OrderStatus === 'function' ? v11OrderStatus(o) : o.status;
+    if (delCount > 0 && st !== 'Despachada' && st !== 'Parcial' && st !== 'Parcialmente despachada') return true;
+    if ((o.status === 'Despachada' || o.status === 'Completa') && (st === 'Pendiente de despacho' || st === 'PENDIENTE')) return true;
+    if (isModern && delCount > 0) {
+      let req = o.requestLines.reduce((s, l) => s + Number(l.total || 0), 0);
+      let res = o.requestLines.reduce((s, l) => s + Number(l.resolvedTotal || 0), 0);
+      if (res < req && (o.status === 'Despachada' || o.status === 'Completa')) return true;
+    }
+    return false;
+  });
+
+  let movesByRef = new Map();
+  (db.movements || []).forEach(m => {
+    if (!m || m._deleted || m.dir !== 'out' || !m.ref) return;
+    if (!movesByRef.has(m.ref)) movesByRef.set(m.ref, []);
+    movesByRef.get(m.ref).push(m);
+  });
+  let missingMovesOrders = (db.orders || []).filter(o => {
+    if (!o || o._deleted || (o.deliveries || []).length === 0) return false;
+    let moves = movesByRef.get(o.number) || [];
+    let delTotal = (o.deliveries || []).reduce((s, d) => s + (d.lines || []).reduce((a, l) => a + Number(l.total || 0), 0), 0);
+    let moveTotal = moves.reduce((s, m) => s + Number(m.total || 0), 0);
+    return delTotal > moveTotal;
+  });
+
+  let activePendings = typeof v1CalculateActiveOrderPendings === 'function' ? v1CalculateActiveOrderPendings() : {};
+  let phantomBuckets = 0;
+  (db.products || []).forEach(p => {
+    let b = (db.stockBuckets && db.stockBuckets[p.id]) || {};
+    let calc = activePendings[p.id] || {};
+    ['preventa', 'distriC', 'distriInterior', 'oesteMendoza', 'oesteJeremias'].forEach(k => {
+      let inBucket = Number(b[k] || 0);
+      let inCalc = Number(calc[k] || 0);
+      if (inBucket > inCalc) phantomBuckets += (inBucket - inCalc);
+    });
+  });
+
+  let totalIssues = discrepanciesCount + unreconciledOrders.length + missingMovesOrders.length + (phantomBuckets > 0 ? 1 : 0);
+
   let html = `
   <div class="headrow">
     <div>
-      <h2>Auditoría y Calibración de Stock</h2>
-      <div class="muted">Compara el saldo físico del sistema con la suma de la base verificada y los movimientos registrados.</div>
+      <h2>Auditoría y Calibración Integral</h2>
+      <div class="muted">Analiza órdenes despachadas, reservas en tránsito, movimientos y saldo físico del sistema.</div>
     </div>
     <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
   </div>
-  <div style="margin: 12px 0; padding: 10px; background: ${discrepanciesCount ? '#fef3c7' : '#ecfdf5'}; border-radius: 6px; font-size: 13px; color: #1e293b;">
-    ${discrepanciesCount 
-      ? `<b>Atención:</b> Se detectaron <b>${discrepanciesCount}</b> productos con desfasaje entre el stock actual y los movimientos registrados.` 
-      : '<b>Excelente:</b> El stock actual del sistema coincide al 100% con los movimientos registrados.'}
+  <div style="margin: 12px 0; padding: 12px; background: ${totalIssues ? '#fef3c7' : '#ecfdf5'}; border: 1px solid ${totalIssues ? '#f59e0b' : '#10b981'}; border-radius: 6px; font-size: 13px; color: #1e293b; line-height: 1.5;">
+    ${totalIssues ? `
+      <b>⚠️ Diagnóstico de discrepancias detectadas:</b><br>
+      ${unreconciledOrders.length ? `• <b>${unreconciledOrders.length}</b> órdenes con salidas físicas que figuran aún como pendientes.<br>` : ''}
+      ${missingMovesOrders.length ? `• <b>${missingMovesOrders.length}</b> órdenes con salidas físicas sin asiento en movimientos de stock.<br>` : ''}
+      ${phantomBuckets > 0 ? `• <b>${phantomBuckets}</b> unidades bloqueadas en reservas fantasma de stock.<br>` : ''}
+      ${discrepanciesCount ? `• <b>${discrepanciesCount}</b> productos con diferencia entre stock físico y movimientos.<br>` : ''}
+      <div style="margin-top:8px;font-weight:600;color:#b45309;">Haga clic en "⚡ Reconciliar Órdenes y Calibrar Stock" para regularizar y calibrar todo con un clic.</div>
+    ` : '<b>Excelente:</b> El stock físico, los movimientos registrados, las reservas y el estado de las órdenes coinciden al 100%.'}
   </div>
   <div class="tablewrap" style="max-height: 380px; overflow-y: auto;">
     <table>
@@ -286,20 +335,26 @@ window.openStockAuditModal = function() {
   </div>
   <div class="right" style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
     <div style="font-size: 12px; color: var(--muted);">Base de referencia: 16/10/2026 13:14 hs.</div>
-    <div style="display: flex; gap: 8px;">
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
       <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
-      <button class="btn btn-primary" onclick="executeStockAlignment()" ${discrepanciesCount === 0 ? 'disabled' : ''}>Alinear Stock con Movimientos</button>
+      <button class="btn btn-primary" onclick="reconcileAllAndCalibrate()" style="background:#10b981;border-color:#10b981;font-weight:bold;">⚡ Reconciliar Órdenes y Calibrar Stock</button>
     </div>
   </div>`;
 
   modal(html);
 };
 
-window.executeStockAlignment = function() {
+window.reconcileAllAndCalibrate = function() {
   if (typeof isAuthorizedWriter === 'function' && !isAuthorizedWriter(session)) {
     return alert('Acceso denegado: Tu usuario está en modo SOLO LECTURA.');
   }
-  customConfirm('¿Confirma que desea ajustar el stock del sistema al saldo exacto calculado por los movimientos registrados? Esto resolverá cualquier desfasaje por concurrencia.', () => {
+  customConfirm('¿Confirma que desea reconciliar las órdenes despachadas, registrar movimientos de salida faltantes, limpiar reservas fantasma y calibrar el stock físico?', () => {
+    // 1. Reconciliar órdenes despachadas y registrar movimientos faltantes
+    if (typeof autoReconcileDispatchedOrders === 'function') {
+      autoReconcileDispatchedOrders();
+    }
+    
+    // 2. Alinear stock físico con movimientos (incluyendo los recién generados)
     const baseline = typeof VERIFIED_STOCK_OCT16_1300 !== 'undefined' ? VERIFIED_STOCK_OCT16_1300 : {};
     const BASE_DATE_ISO = '2026-10-16T16:14:00.000Z';
     
@@ -325,11 +380,21 @@ window.executeStockAlignment = function() {
       }
     });
 
-    audit('Alineación', 'Stock', 'Auto-Reconciliación', 'Calibración automática con suma de movimientos');
-    if (typeof saveStock === 'function') saveStock();
-    else save();
+    // 3. Sincronizar buckets eliminando reservas fantasma
+    if (typeof v1SyncOrderBuckets === 'function') {
+      v1SyncOrderBuckets();
+    }
+
+    audit('Alineación', 'Sistema', 'Reconciliación Total', 'Calibración integral de órdenes, movimientos y stock');
+    if (typeof save === 'function') save();
     closeModal();
-    if (typeof renderStockV1 === 'function') renderStockV1();
-    toast('Stock alineado y sincronizado exitosamente con el registro de movimientos');
+    if (typeof renderAll === 'function') renderAll();
+    else {
+      if (typeof renderStockV1 === 'function') renderStockV1();
+      if (typeof renderOrdersV16 === 'function') renderOrdersV16();
+      if (typeof renderDashboard === 'function') renderDashboard();
+    }
+    toast('¡Calibración exitosa! Órdenes regularizadas, reservas limpiadas y stock actualizado.', 'success');
   });
-};
+};
+window.executeStockAlignment = window.reconcileAllAndCalibrate;

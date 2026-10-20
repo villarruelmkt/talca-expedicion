@@ -69,7 +69,7 @@ applyVerifiedStockV38();
 });
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 50;
+const APP_BUILD_VERSION = 51;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -960,36 +960,114 @@ function autoReconcileDispatchedOrders() {
   });
 
   (db.orders || []).forEach(o => {
-    if (!o || !o.number) return;
+    if (!o || !o.number || o._deleted) return;
     let moves = movesByRef.get(o.number) || [];
     let delCount = (o.deliveries || []).length;
-    
-    // Si la orden ya tiene entregas pero status quedó en PENDIENTE o outstanding es 0
-    if (Array.isArray(o.requestLines) && delCount > 0 && o.status === 'PENDIENTE') {
-      let req = o.requestLines.reduce((s, l) => s + Number(l.total || 0), 0);
-      let res = o.requestLines.reduce((s, l) => s + Math.min(Number(l.total || 0), Number(l.resolvedTotal || 0)), 0);
-      if (req - res <= 0) {
-        o.status = 'Despachada';
-        modified = true;
+    let isModern = Array.isArray(o.requestLines) && o.requestLines.length > 0;
+
+    // CASO 1: La orden tiene entregas registradas
+    if (delCount > 0) {
+      let deliveredMap = {};
+      (o.deliveries || []).forEach(d => {
+        (d.lines || []).forEach(l => {
+          let pid = l.sourceProductId || l.productId;
+          if (pid) deliveredMap[pid] = (deliveredMap[pid] || 0) + Number(l.total || 0);
+        });
+      });
+
+      if (isModern) {
+        let reqTotal = o.requestLines.reduce((s, l) => s + Number(l.total || 0), 0);
+        (o.requestLines || []).forEach(l => {
+          let delQty = deliveredMap[l.productId] || 0;
+          if (o.status === 'Despachada' || o.status === 'Completa') {
+            l.resolvedTotal = Number(l.total || 0);
+          } else if (delQty > 0) {
+            l.resolvedTotal = Math.min(Number(l.total || 0), delQty);
+          }
+        });
+
+        let resTotal = o.requestLines.reduce((s, l) => s + Number(l.resolvedTotal || 0), 0);
+        let totalDelivered = Object.values(deliveredMap).reduce((s, v) => s + v, 0);
+
+        if ((reqTotal > 0 && resTotal >= reqTotal) || (reqTotal > 0 && totalDelivered >= reqTotal) || o.status === 'Despachada' || o.status === 'Completa') {
+          if (o.status !== 'Despachada') {
+            o.status = 'Despachada';
+            modified = true;
+          }
+          (o.requestLines || []).forEach(l => {
+            if (l.resolvedTotal !== Number(l.total || 0)) {
+              l.resolvedTotal = Number(l.total || 0);
+              modified = true;
+            }
+          });
+        } else if (resTotal > 0 || totalDelivered > 0) {
+          if (o.status !== 'Parcial' && o.status !== 'Parcialmente despachada') {
+            o.status = 'Parcial';
+            modified = true;
+          }
+        }
+      } else {
+        if (o.status === 'Completa' || o.status === 'Recibida') {
+          o.status = 'Despachada';
+          modified = true;
+        }
       }
+
+      // Reconciliación de movimientos de stock para entregas confirmadas
+      let moveQtyByProd = {};
+      moves.forEach(m => {
+        moveQtyByProd[m.productId] = (moveQtyByProd[m.productId] || 0) + Number(m.total || 0);
+      });
+
+      Object.entries(deliveredMap).forEach(([pid, delTotal]) => {
+        let movedTotal = moveQtyByProd[pid] || 0;
+        let missing = delTotal - movedTotal;
+        if (missing > 0) {
+          let firstDelivery = o.deliveries[0] || {};
+          let moveDate = firstDelivery.date || o.date || now();
+          let newMove = {
+            id: uid('m'),
+            type: 'Orden de carga',
+            ref: o.number,
+            productId: pid,
+            total: missing,
+            dir: 'out',
+            date: moveDate,
+            note: firstDelivery.note || 'Reconciliación de salida confirmada',
+            user: firstDelivery.user || session?.user || 'Encargado',
+            shift: firstDelivery.shift || session?.shift || 'Mañana'
+          };
+          db.movements.push(newMove);
+          if (!movesByRef.has(o.number)) movesByRef.set(o.number, []);
+          movesByRef.get(o.number).push(newMove);
+
+          if (moveDate > STOCK_BASELINE_DATE) {
+            db.stock[pid] = (Number(db.stock[pid]) || 0) - missing;
+            if (typeof v1EnsureBucket === 'function') {
+              v1EnsureBucket(pid).physical = db.stock[pid];
+            }
+          }
+          modified = true;
+        }
+      });
     }
 
-    // Si tiene movimientos de salida registrados pero no tiene entregas cargadas
+    // CASO 2: Tiene movimientos de salida registrados pero no tiene entregas cargadas
     if (moves.length > 0 && delCount === 0) {
       let firstMove = moves[0];
       let delLines = moves.map(m => ({ productId: m.productId, sourceProductId: m.productId, total: m.total }));
       o.deliveries = [{
         id: uid('d'),
-        date: firstMove.date || now(),
+        date: firstMove.date || o.date || now(),
         lines: delLines,
         result: 'Salida confirmada',
-        note: 'Reconciliación de salida confirmada',
+        note: firstMove.note || 'Reconciliación de salida confirmada',
         user: firstMove.user || 'Encargado',
         shift: firstMove.shift || 'Mañana'
       }];
-      if (Array.isArray(o.requestLines)) {
+      if (isModern) {
         let moveQty = {};
-        moves.forEach(m => { moveQty[m.productId] = (moveQty[m.productId] || 0) + m.total; });
+        moves.forEach(m => { moveQty[m.productId] = (moveQty[m.productId] || 0) + Number(m.total || 0); });
         o.requestLines.forEach(l => {
           let delivered = moveQty[l.productId] || l.total;
           l.resolvedTotal = Math.min(Number(l.total || 0), delivered);
@@ -998,13 +1076,65 @@ function autoReconcileDispatchedOrders() {
       o.status = 'Despachada';
       modified = true;
     }
+
+    // CASO 3: Marcada como Despachada o Completa pero sin entregas ni movimientos registrados
+    if ((o.status === 'Despachada' || o.status === 'Completa') && delCount === 0 && moves.length === 0) {
+      if (isModern) {
+        let delLines = [];
+        (o.requestLines || []).forEach(l => {
+          if (l.resolvedTotal !== Number(l.total || 0)) {
+            l.resolvedTotal = Number(l.total || 0);
+            modified = true;
+          }
+          delLines.push({ productId: l.productId, sourceProductId: l.productId, total: l.total });
+          let moveDate = o.date || now();
+          let newMove = {
+            id: uid('m'),
+            type: 'Orden de carga',
+            ref: o.number,
+            productId: l.productId,
+            total: Number(l.total || 0),
+            dir: 'out',
+            date: moveDate,
+            note: 'Reconciliación de orden despachada',
+            user: session?.user || 'Encargado',
+            shift: session?.shift || 'Mañana'
+          };
+          db.movements.push(newMove);
+          if (!movesByRef.has(o.number)) movesByRef.set(o.number, []);
+          movesByRef.get(o.number).push(newMove);
+
+          if (moveDate > STOCK_BASELINE_DATE) {
+            db.stock[l.productId] = Math.max(0, (Number(db.stock[l.productId]) || 0) - Number(l.total || 0));
+            if (typeof v1EnsureBucket === 'function') {
+              v1EnsureBucket(l.productId).physical = db.stock[l.productId];
+            }
+          }
+          modified = true;
+        });
+        o.deliveries = [{
+          id: uid('d'),
+          date: o.date || now(),
+          lines: delLines,
+          result: 'Salida confirmada',
+          note: 'Reconciliación automática de salida',
+          user: session?.user || 'Encargado',
+          shift: session?.shift || 'Mañana'
+        }];
+      }
+      o.status = 'Despachada';
+      modified = true;
+    }
   });
 
   if (modified) {
+    if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
     safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
   }
+  return modified;
 }
 autoReconcileDispatchedOrders();
+window.autoReconcileDispatchedOrders = autoReconcileDispatchedOrders;
 
 window.saveFleteros = function() {
   if (typeof lastMasterHashes !== 'undefined') lastMasterHashes.fleteros = '';

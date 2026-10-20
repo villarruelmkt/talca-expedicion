@@ -193,7 +193,7 @@ function v1CalculateActiveOrderPendings() {
   let map = {};
   let validPendingTypes = (typeof OPERATIONAL_PENDING_TYPES !== 'undefined' && OPERATIONAL_PENDING_TYPES) ? OPERATIONAL_PENDING_TYPES : ['preventa', 'distriC', 'distriInterior', 'oesteMendoza', 'oesteJeremias'];
   (db.orders || []).forEach(o => {
-    if (!o || o._deleted || o.pendingType === 'cancelled' || o.status === 'Anulada') return;
+    if (!o || o._deleted || o.pendingType === 'cancelled' || o.status === 'Anulada' || o.status === 'Despachada' || o.status === 'Completa') return;
     let type = o.pendingType;
     if (!type || !validPendingTypes.includes(type)) return;
     
@@ -270,6 +270,8 @@ function savePendingV1(pid){let p=db.products.find(x=>x.id===pid),b=v1EnsureBuck
 
 function exportStockV1CSV(){let rows=[['Código','Producto','Stock físico','Preventa','Distri C','Distri Interior','Sin codificar','Oeste Mendoza','Oeste Jeremías','Total pendiente','% disponible']];(db.products||[]).filter(p=>p.active!==false).forEach(p=>{let b=v1EnsureBucket(p.id),t=v1PendingTotal(b);rows.push([p.id,p.name,equivalent(b.physical,p),equivalent(b.preventa,p),equivalent(b.distriC,p),equivalent(b.distriInterior,p),equivalent(b.sinCodificar,p),equivalent(b.oesteMendoza,p),equivalent(b.oesteJeremias,p),equivalent(t,p),v1Pct(b).toFixed(1)+'%'])});downloadCSV('stock_y_pendientes.csv',rows)}
 function exportBackupV1(){
+  if (typeof autoReconcileDispatchedOrders === 'function') autoReconcileDispatchedOrders();
+  if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
   let payload={
     app: 'Talca Expedición',
     schemaVersion: window.V16_SCHEMA_VERSION || 7,
@@ -459,10 +461,30 @@ function v11PendingOptions(selected=''){
 function v11IncreasePending(type,productId,total){if(!type||type==='immediate'||!total)return;let b=v1EnsureBucket(productId);b[type]=Number(b[type]||0)+Number(total||0)}
 function v11DecreasePending(type,productId,total){if(!type||type==='immediate'||!total)return 0;let b=v1EnsureBucket(productId),applied=Math.min(Number(b[type]||0),Number(total||0));b[type]=Math.max(0,Number(b[type]||0)-applied);return applied}
 function v11OrderRequested(o){return (o.requestLines||[]).reduce((s,l)=>s+Number(l.total||0),0)}
-function v11OrderResolved(o){return (o.requestLines||[]).reduce((s,l)=>s+Math.min(Number(l.total||0),Number(l.resolvedTotal||0)),0)}
-function v11OrderOutstanding(o){return Math.max(0,v11OrderRequested(o)-v11OrderResolved(o))}
+function v11OrderResolved(o){
+  if(o.status==='Despachada'||o.status==='Completa')return v11OrderRequested(o);
+  let delMap = {};
+  (o.deliveries || []).forEach(d => {
+    (d.lines || []).forEach(l => {
+      let pid = l.sourceProductId || l.productId;
+      if (pid) delMap[pid] = (delMap[pid] || 0) + Number(l.total || 0);
+    });
+  });
+  return (o.requestLines||[]).reduce((s,l)=>{
+    let res = Number(l.resolvedTotal || 0);
+    let fromDel = delMap[l.productId] || 0;
+    return s + Math.min(Number(l.total||0), Math.max(res, fromDel));
+  }, 0);
+}
+function v11OrderOutstanding(o){
+  if(o.status==='Despachada'||o.status==='Completa'||o.status==='Anulada')return 0;
+  return Math.max(0,v11OrderRequested(o)-v11OrderResolved(o));
+}
 function v11DeliveredTotal(o){return (o.deliveries||[]).reduce((s,d)=>s+(d.lines||[]).reduce((a,l)=>a+Number(l.total||0),0),0)}
-function v11LineOutstanding(l){return Math.max(0,Number(l.total||0)-Number(l.resolvedTotal||0))}
+function v11LineOutstanding(l, o){
+  if(o && (o.status==='Despachada'||o.status==='Completa'||o.status==='Anulada'))return 0;
+  return Math.max(0,Number(l.total||0)-Number(l.resolvedTotal||0));
+}
 function v11FindRequestLine(o,sourceProductId){return (o.requestLines||[]).find(l=>l.productId===sourceProductId&&v11LineOutstanding(l)>0)||(o.requestLines||[]).find(l=>l.productId===sourceProductId)}
 
 function v11ProductSelect(selected=''){return db.products.filter(p=>p.active!==false).map(p=>`<option value="${p.id}" ${p.id===selected?'selected':''}>${p.id} · ${p.name}</option>`).join('')}
@@ -1387,7 +1409,8 @@ v13TypeOptions=function(selected='administrative'){
   return html;
 };
 window.v11OrderStatus = function(o){
-  if(o.pendingType==='cancelled')return 'Anulada';
+  if(o.pendingType==='cancelled'||o.status==='Anulada')return 'Anulada';
+  if(o.status==='Despachada'||o.status==='Completa')return 'Despachada';
   if(o.pendingType==='immediate')return o.status||'Despachada';
   let outstanding=v11OrderOutstanding(o),delivered=v11DeliveredTotal(o);
   let substitution=(o.deliveries||[]).some(d=>(d.lines||[]).some(l=>l.sourceProductId&&l.sourceProductId!==l.productId));
@@ -1857,11 +1880,82 @@ function viewOrder(id){
   let deliveries=(o.deliveries||[]).map((d,i)=>`<div class="card" style="margin-top:10px"><b>Salida ${i+1}</b> · ${fmtDate(d.date)} · ${v14Text(d.user||'')} · Turno ${v14Text(d.shift||'')}<br><br>${(d.lines||[]).map(l=>{let p=db.products.find(x=>x.id===l.productId),s=db.products.find(x=>x.id===(l.sourceProductId||l.productId)),change=l.sourceProductId&&l.sourceProductId!==l.productId?` <span class="status open">Sustituye a ${v14Text(s?.name||l.sourceProductId)}</span>`:'';return `<b>${v14Text(p?.name||l.productId)}</b>: ${equivalent(l.total,p)}${change}`}).join('<br>')}<br><span class="muted">Pallets: sale ${d.palletOut||0}, entra ${d.palletIn||0}. Chapadur: sale ${d.chapOut||0}, entra ${d.chapIn||0}.</span></div>`).join('')||'<div class="card" style="margin-top:10px"><span class="muted">Todavía no se confirmó ninguna salida.</span></div>';
   let history=(o.editHistory||[]).slice().reverse().map(h=>`<div class="v13-edit-history"><b>${fmtDate(h.date)} · ${v14Text(h.user||'')} · Turno ${v14Text(h.shift||'')}</b><br>${v14Text(h.reason||'Sin motivo indicado')}</div>`).join('');
   let status=modern?v11OrderStatus(o):o.status;
+  let canForceDispatched = (status !== 'Despachada' && o.status !== 'Despachada' && status !== 'Anulada' && o.status !== 'Anulada');
   modal(`<div class="headrow"><div><h2>Orden ${v14Text(o.number)}</h2><div class="muted">${v14Text(v13CarrierDisplay(f))} · ${v14Text(o.date)} · ${v14Text(V11_PENDING_LABELS[o.pendingType||'legacy']||'Operación histórica')}</div></div><button class="btn btn-secondary" onclick="closeModal()">Cerrar</button></div>
   <div class="summary"><b>Estado: ${v14Text(status)}</b>${modern&&v13IsOperational(o.pendingType)?` · Pendiente total: ${outstanding} unidades`:''}<br><span class="muted">${v14Text(o.note||'Sin observaciones')}</span></div>
   ${requests}${deliveries}${history?`<div class="card" style="margin-top:10px"><h3>Historial de correcciones</h3>${history}</div>`:''}
-  <div class="right" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><button type="button" class="btn btn-danger" onclick="deleteOrder('${o.id}')">Eliminar orden</button></div><div style="display:flex;gap:8px;"><button class="btn btn-secondary" onclick="closeModal();openOrderForm('${o.id}')">Corregir orden</button>${modern&&v13IsOperational(o.pendingType)&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openPendingDispatchV11(db.orders.find(x=>x.id==='${o.id}'))">Confirmar salida</button>`:''}<button class="btn btn-secondary" onclick="v16PrintOrder('${o.id}')">Imprimir</button></div></div>`);
+  <div class="right" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><button type="button" class="btn btn-danger" onclick="deleteOrder('${o.id}')">Eliminar orden</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-secondary" onclick="closeModal();openOrderForm('${o.id}')">Corregir orden</button>${canForceDispatched ? `<button class="btn btn-secondary" style="border-color:#10b981;color:#10b981;font-weight:600;" onclick="v13ForceOrderDispatched('${o.id}')">📦 Marcar Despachada</button>` : ''}${modern&&v13IsOperational(o.pendingType)&&outstanding>0?`<button class="btn btn-primary" onclick="closeModal();openPendingDispatchV11(db.orders.find(x=>x.id==='${o.id}'))">Confirmar salida</button>`:''}<button class="btn btn-secondary" onclick="v16PrintOrder('${o.id}')">Imprimir</button></div></div>`);
 }
+
+window.v13ForceOrderDispatched = function(id) {
+  let o = (db.orders || []).find(x => x && (x.id === id || String(x.id) === String(id)));
+  if (!o) return;
+  customConfirm(`¿Desea forzar la orden ${o.number} como DESPACHADA? Esto regularizará el stock físico descontando las salidas si no estaban registradas, limpiará los pendientes y marcará la orden como despachada.`, () => {
+    let nowIso = now();
+    let moveRef = o.number;
+    let existingMoves = (db.movements || []).filter(m => !m._deleted && m.ref === moveRef && m.dir === 'out');
+    let moveQtyByProd = {};
+    existingMoves.forEach(m => {
+      moveQtyByProd[m.productId] = (moveQtyByProd[m.productId] || 0) + Number(m.total || 0);
+    });
+
+    let linesToDeliver = [];
+    if (Array.isArray(o.requestLines) && o.requestLines.length > 0) {
+      o.requestLines.forEach(l => {
+        let missingMove = Number(l.total || 0) - (moveQtyByProd[l.productId] || 0);
+        if (missingMove > 0) {
+          let newMove = {
+            id: uid('m'),
+            type: 'Orden de carga',
+            ref: o.number,
+            productId: l.productId,
+            total: missingMove,
+            dir: 'out',
+            date: nowIso,
+            note: 'Despacho forzado / Regularización de orden',
+            user: session?.user || 'Encargado',
+            shift: session?.shift || 'Mañana'
+          };
+          db.movements.push(newMove);
+          db.stock[l.productId] = Math.max(0, (Number(db.stock[l.productId]) || 0) - missingMove);
+          if (typeof v1EnsureBucket === 'function') {
+            v1EnsureBucket(l.productId).physical = db.stock[l.productId];
+          }
+        }
+        l.resolvedTotal = Number(l.total || 0);
+        linesToDeliver.push({ productId: l.productId, sourceProductId: l.productId, total: l.total });
+      });
+    }
+
+    if (!Array.isArray(o.deliveries) || o.deliveries.length === 0) {
+      o.deliveries = [{
+        id: uid('d'),
+        date: nowIso,
+        lines: linesToDeliver,
+        result: 'Salida confirmada',
+        note: 'Salida regularizada forzada',
+        user: session?.user || 'Encargado',
+        shift: session?.shift || 'Mañana'
+      }];
+    }
+
+    o.status = 'Despachada';
+    if (!Array.isArray(o.editHistory)) o.editHistory = [];
+    o.editHistory.push({
+      date: nowIso,
+      user: session?.user || 'Encargado',
+      shift: session?.shift || 'Mañana',
+      reason: 'Orden marcada manualmente como despachada'
+    });
+
+    if (typeof v1SyncOrderBuckets === 'function') v1SyncOrderBuckets();
+    audit('Modificación', 'Orden', o.number, 'Orden marcada manualmente como Despachada y stock ajustado');
+    save();
+    closeModal();
+    if (typeof renderAll === 'function') renderAll();
+    toast(`Orden ${o.number} marcada como Despachada con éxito.`, 'success');
+  });
+};
 
 // Resumen del turno centrado en órdenes y productos.
 generateShiftSummary=function(){
