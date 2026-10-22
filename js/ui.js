@@ -2465,8 +2465,14 @@ printSection=function(id,title){
     let userStr = (session && (session.user?.displayName || session.user?.username || session.user)) || 'Usuario';
     let shiftStr = (session && session.shift) || '-';
 
-    extraStyle='<style>@page{size:A4 landscape;margin:8mm;} #printArea table{font-size:11px!important;} #printArea th,#printArea td{padding:5px 6px!important;} #printArea .v16-movements-total td{background-color:#eef2ff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;font-weight:bold!important;border-top:2px solid #19417f!important;border-bottom:2px solid #19417f!important;font-size:11.5px!important;}</style>';
+    extraStyle='<style>@page{size:A4 portrait;margin:8mm;} #printArea table{font-size:10px!important;width:100%!important;} #printArea th,#printArea td{padding:4px 5px!important;} #printArea .v16-movements-total td{background-color:#eef2ff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;font-weight:bold!important;border-top:2px solid #19417f!important;border-bottom:2px solid #19417f!important;font-size:10.5px!important;} #printArea .v16-movements-summary-card table th, #printArea .v16-movements-summary-card table td{padding:4px 6px!important;}</style>';
     headerHtml=`<div style="margin-bottom:12px;font-size:12px;color:#333;background:#f5f5f5;padding:6px 10px;border-radius:4px;border:1px solid #ddd;"><b>Filtros aplicados:</b> &nbsp; <b>Desde:</b> ${v14Text(fFrom)} &nbsp;·&nbsp; <b>Hasta:</b> ${v14Text(fTo)} &nbsp;·&nbsp; <b>Tipo:</b> ${v14Text(fType)} &nbsp;·&nbsp; <b>Impreso:</b> ${fmtDate(now())} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(userStr)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(shiftStr)}</div>`;
+
+    if (!clone.querySelector('.v16-movements-summary-card') && typeof generateMovementsProductsSummaryHtml === 'function') {
+      let list = typeof v16GetFilteredMovementsList === 'function' ? v16GetFilteredMovementsList() : [];
+      let summaryHtml = generateMovementsProductsSummaryHtml(list);
+      if (summaryHtml) clone.innerHTML += summaryHtml;
+    }
   }
   if(id==='orders'){
     let fCarrier = document.getElementById('ofCarrier')?.value;

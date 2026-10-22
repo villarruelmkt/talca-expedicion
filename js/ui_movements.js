@@ -13,7 +13,8 @@ function v16GroupedMovements(){
         input:(m.dir==='in'?v16MovementFardos(m):0),
         output:(m.dir==='out'?v16MovementFardos(m):0),
         neutral:(m.dir==='none'||m.dir==='neutral'?v16MovementFardos(m):0),
-        count:1,grouped:false
+        count:1,grouped:false,
+        movements:[m]
       });
       return;
     }
@@ -24,7 +25,8 @@ function v16GroupedMovements(){
         key,id:m.id,date:m.operationDate||m.date,
         type:v16BaseMovementType(m.type),ref:m.ref||'',
         user:m.user||'',shift:m.shift||'',
-        input:0,output:0,neutral:0,count:0,grouped:true
+        input:0,output:0,neutral:0,count:0,grouped:true,
+        movements:[]
       });
     }
     let g=map.get(key);
@@ -33,6 +35,7 @@ function v16GroupedMovements(){
     else if(m.dir==='out')g.output+=v16MovementFardos(m);
     else if(m.dir==='none'||m.dir==='neutral')g.neutral+=v16MovementFardos(m);
     g.count++;
+    g.movements.push(m);
   });
 
   output.push(...map.values());
@@ -47,10 +50,27 @@ function renderEditMovementBtn(g) {
   return '<td class="no-print"></td>';
 }
 
-function renderMovementsV16(){
-  let body=document.getElementById('movementsBody');if(!body)return;
-  let list=v16GroupedMovements();
-  
+function renderGroupedProductLines(g) {
+  if (!g || !g.movements || !g.movements.length) return '';
+  let prodMap = new Map();
+  g.movements.forEach(m => {
+    let pid = m.productId;
+    if (!pid) return;
+    let fardos = v16MovementFardos(m);
+    prodMap.set(pid, (prodMap.get(pid) || 0) + fardos);
+  });
+  if (!prodMap.size) return '';
+  let lines = [];
+  prodMap.forEach((fardos, pid) => {
+    let p = db.products.find(x => x.id === pid);
+    let pName = p ? p.name : pid;
+    lines.push(`• ${v14Text(pName)}: <b>${v16FmtFardos(fardos)}</b>`);
+  });
+  return `<div class="v16-movement-prods" style="font-size:10px;color:#374151;margin-top:2px;line-height:1.3;">${lines.join('<br>')}</div>`;
+}
+
+function v16GetFilteredMovementsList() {
+  let list = v16GroupedMovements();
   let fromD = document.getElementById('movFrom')?.value;
   let toD = document.getElementById('movTo')?.value;
   let t = document.getElementById('movType')?.value;
@@ -71,12 +91,145 @@ function renderMovementsV16(){
   } else if (t) {
     list = list.filter(g => g.type === t);
   }
+  return list;
+}
+window.v16GetFilteredMovementsList = v16GetFilteredMovementsList;
 
-  let totalCount = list.length;
-  let isCapped = false;
+function generateMovementsProductsSummaryHtml(list) {
+  if (!list || !list.length) return '';
+  
+  let prodSummary = {};
+  let totalInput = 0;
+  let totalOutput = 0;
+  let totalNeutral = 0;
+  let hasInput = false;
+  let hasOutput = false;
+  let hasNeutral = false;
+
+  list.forEach(g => {
+    (g.movements || []).forEach(m => {
+      let pid = m.productId;
+      if (!pid) return;
+      let p = db.products.find(x => x.id === pid);
+      let pName = p ? p.name : pid;
+      let fardos = v16MovementFardos(m);
+
+      if (!prodSummary[pid]) {
+        prodSummary[pid] = {
+          id: pid,
+          name: pName,
+          input: 0,
+          output: 0,
+          neutral: 0
+        };
+      }
+
+      if (m.dir === 'in') {
+        prodSummary[pid].input += fardos;
+        totalInput += fardos;
+        hasInput = true;
+      } else if (m.dir === 'out') {
+        prodSummary[pid].output += fardos;
+        totalOutput += fardos;
+        hasOutput = true;
+      } else {
+        prodSummary[pid].neutral += fardos;
+        totalNeutral += fardos;
+        hasNeutral = true;
+      }
+    });
+  });
+
+  let pids = Object.keys(prodSummary).sort((a,b) => {
+    let pA = (prodSummary[a].name || '').toLowerCase();
+    let pB = (prodSummary[b].name || '').toLowerCase();
+    return pA.localeCompare(pB);
+  });
+
+  if (!pids.length) return '';
+
+  let isMultiDir = hasInput && (hasOutput || hasNeutral);
+
+  let rows = pids.map(pid => {
+    let item = prodSummary[pid];
+    if (isMultiDir) {
+      let net = item.input - item.output;
+      return `<tr>
+        <td style="padding:4px 6px;font-weight:600;">${v14Text(item.id)}</td>
+        <td style="padding:4px 6px;">${v14Text(item.name)}</td>
+        <td style="padding:4px 6px;text-align:right;color:#059669;">${item.input ? v16FmtFardos(item.input) : '-'}</td>
+        <td style="padding:4px 6px;text-align:right;color:#dc2626;">${item.output ? v16FmtFardos(item.output) : '-'}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:bold;">${v16FmtFardos(net)}</td>
+      </tr>`;
+    } else {
+      let qty = hasInput ? item.input : (hasOutput ? item.output : item.neutral);
+      let color = hasInput ? '#059669' : (hasOutput ? '#dc2626' : '#4b5563');
+      return `<tr>
+        <td style="padding:4px 6px;font-weight:600;">${v14Text(item.id)}</td>
+        <td style="padding:4px 6px;">${v14Text(item.name)}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:bold;color:${color};">${v16FmtFardos(qty)}</td>
+      </tr>`;
+    }
+  }).join('');
+
+  let grandTotalQty = hasInput ? totalInput : (hasOutput ? totalOutput : totalNeutral);
+  let totalRow = '';
+  if (isMultiDir) {
+    let grandNet = totalInput - totalOutput;
+    totalRow = `<tr style="background:#eef2ff;font-weight:bold;border-top:2px solid #19417f;">
+      <td colspan="2" style="padding:6px;text-align:left;">TOTAL CONSOLIDADO (${pids.length} ${pids.length === 1 ? 'producto' : 'productos'})</td>
+      <td style="padding:6px;text-align:right;color:#059669;">${totalInput ? v16FmtFardos(totalInput) : '-'}</td>
+      <td style="padding:6px;text-align:right;color:#dc2626;">${totalOutput ? v16FmtFardos(totalOutput) : '-'}</td>
+      <td style="padding:6px;text-align:right;font-weight:bold;">${v16FmtFardos(grandNet)}</td>
+    </tr>`;
+  } else {
+    let color = hasInput ? '#059669' : (hasOutput ? '#dc2626' : '#4b5563');
+    totalRow = `<tr style="background:#eef2ff;font-weight:bold;border-top:2px solid #19417f;">
+      <td colspan="2" style="padding:6px;text-align:left;">TOTAL CONSOLIDADO (${pids.length} ${pids.length === 1 ? 'producto' : 'productos'})</td>
+      <td style="padding:6px;text-align:right;color:${color};font-weight:bold;">${v16FmtFardos(grandTotalQty)}</td>
+    </tr>`;
+  }
+
+  return `
+    <div class="card v16-movements-summary-card" style="margin-top:16px;page-break-inside:avoid;border:1px solid #cbd5e1;border-radius:8px;padding:12px;background:#ffffff;">
+      <div style="font-weight:bold;font-size:12px;color:#19417f;margin-bottom:8px;border-bottom:2px solid #19417f;padding-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+        <span>RESUMEN CONSOLIDADO POR PRODUCTO</span>
+        <span style="font-size:11px;font-weight:normal;color:#6b7280;">(${pids.length} ${pids.length === 1 ? 'producto' : 'productos'})</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;" border="1">
+        <thead>
+          <tr style="background:#eef2ff;font-weight:bold;">
+            <th style="padding:5px 6px;text-align:left;width:70px;">Cód.</th>
+            <th style="padding:5px 6px;text-align:left;">Producto</th>
+            ${isMultiDir ? `
+              <th style="padding:5px 6px;text-align:right;width:110px;">Entradas</th>
+              <th style="padding:5px 6px;text-align:right;width:110px;">Salidas</th>
+              <th style="padding:5px 6px;text-align:right;width:110px;">Total Neto</th>
+            ` : `
+              <th style="padding:5px 6px;text-align:right;width:130px;">Cantidad total</th>
+            `}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+        <tfoot>
+          ${totalRow}
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+window.generateMovementsProductsSummaryHtml = generateMovementsProductsSummaryHtml;
+
+function renderMovementsV16(){
+  let body=document.getElementById('movementsBody');if(!body)return;
+  let list=v16GetFilteredMovementsList();
+  let summaryEl = document.getElementById('movementsProductsSummary');
 
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:16px;">No hay movimientos registrados para los filtros seleccionados.</td></tr>';
+    if (summaryEl) summaryEl.innerHTML = '';
     return;
   }
 
@@ -92,7 +245,10 @@ function renderMovementsV16(){
 
   let rowsHtml = list.map(g=>`<tr>
     <td>${fmtDate(g.date)}</td>
-    <td>${v14Text(g.type)}${g.count>1?`<span class="v16-group-badge">${g.count} productos</span>`:''}</td>
+    <td>
+      <b>${v14Text(g.type)}</b>${g.count>1?`<span class="v16-group-badge">${g.count} productos</span>`:''}
+      ${renderGroupedProductLines(g)}
+    </td>
     <td>${v14Text(g.ref||'')}</td>
     <td>${g.input?v16FmtFardos(g.input):''}</td>
     <td>${g.output?v16FmtFardos(g.output):''}</td>
@@ -102,12 +258,8 @@ function renderMovementsV16(){
     ${renderEditMovementBtn(g)}
   </tr>`).join('');
 
-  if (isCapped) {
-    rowsHtml += `<tr><td colspan="9" style="text-align:center;background:var(--card);color:var(--muted);padding:10px;font-size:13px;font-weight:bold;">Mostrando los 200 movimientos más recientes de ${totalCount}. Utilice los filtros 'Desde', 'Hasta' o 'Tipo' para ver operaciones anteriores.</td></tr>`;
-  }
-
   let totalRowHtml = `<tr class="v16-movements-total" style="font-weight:bold;background:#eef2ff;border-top:2px solid #19417f;border-bottom:2px solid #19417f;">
-    <td colspan="3" style="font-weight:bold;text-align:left;padding:8px 10px;">TOTALIZADO FINAL (${list.length} ${list.length === 1 ? 'operación' : 'operaciones'}${isCapped ? ' mostradas' : ''})</td>
+    <td colspan="3" style="font-weight:bold;text-align:left;padding:8px 10px;">TOTALIZADO FINAL (${list.length} ${list.length === 1 ? 'operación' : 'operaciones'})</td>
     <td style="font-weight:bold;color:#059669;padding:8px 10px;">${totalInput ? v16FmtFardos(totalInput) : '-'}</td>
     <td style="font-weight:bold;color:#dc2626;padding:8px 10px;">${totalOutput ? v16FmtFardos(totalOutput) : '-'}</td>
     <td style="font-weight:bold;color:#4b5563;padding:8px 10px;">${totalNeutral ? v16FmtFardos(totalNeutral) : '-'}</td>
@@ -116,8 +268,11 @@ function renderMovementsV16(){
   </tr>`;
 
   rowsHtml += totalRowHtml;
-
   body.innerHTML = rowsHtml;
+
+  if (summaryEl) {
+    summaryEl.innerHTML = generateMovementsProductsSummaryHtml(list);
+  }
 }
 
 window.clearMovFilters = function() {
