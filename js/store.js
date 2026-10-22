@@ -69,7 +69,7 @@ applyVerifiedStockV38();
 });
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 51;
+const APP_BUILD_VERSION = 52;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;
@@ -479,15 +479,10 @@ function syncMovementsOnDemand(force = false) {
 
   let movementsBody = document.getElementById('movementsBody');
   if (movementsBody && (!db.movements || db.movements.length === 0)) {
-    movementsBody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:#6b7280;">Sincronizando últimos movimientos desde la nube...</td></tr>';
+    movementsBody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:#6b7280;">Sincronizando movimientos desde la nube...</td></tr>';
   }
 
   let query = firestoreDb.collection('movements').orderBy('date', 'desc');
-  // Sin restricción de límite para el usuario Monica
-  let isMonica = typeof isUserMonica === 'function' && isUserMonica(session);
-  if (!isMonica) {
-    query = query.limit(100);
-  }
 
   query.get()
     .then(snap => {
@@ -507,7 +502,7 @@ function syncMovementsOnDemand(force = false) {
         db.movements = Array.from(map.values()).sort((a,b) => (a.date||'') > (b.date||'') ? 1 : ((a.date||'') < (b.date||'') ? -1 : 0));
         safeSet(localStorage, 'talcaExpV02', JSON.stringify(db));
         if (typeof renderMovementsV16 === 'function') renderMovementsV16();
-        if (force && typeof toast === 'function') toast('Movimientos sincronizados con la nube (últimos 100).', 'success');
+        if (force && typeof toast === 'function') toast('Movimientos sincronizados con la nube.', 'success');
       } else if (force && typeof toast === 'function') {
         toast('No se encontraron nuevos movimientos en la nube.', 'info');
       }

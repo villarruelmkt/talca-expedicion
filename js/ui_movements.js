@@ -74,11 +74,6 @@ function renderMovementsV16(){
 
   let totalCount = list.length;
   let isCapped = false;
-  let isMonica = typeof isUserMonica === 'function' && isUserMonica(session);
-  if (!isMonica && !fromD && !toD && !t && list.length > 200) {
-    list = list.slice(0, 200);
-    isCapped = true;
-  }
 
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:16px;">No hay movimientos registrados para los filtros seleccionados.</td></tr>';

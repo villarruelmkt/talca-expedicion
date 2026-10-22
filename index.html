@@ -163,7 +163,7 @@ window.addEventListener('unhandledrejection', function(event) {
 </section>
 
 <section id="movements" class="page hidden">
-  <div class="headrow"><div><h1>Libro de movimientos</h1><div class="muted">Trazabilidad de ingresos, salidas y movimientos sin impacto físico.</div></div><div class="toolbar no-print"><button class="btn btn-secondary" onclick="syncMovementsOnDemand(true)" title="Consultar últimos movimientos en la nube"><span class="icon">🔄</span> Actualizar</button><button class="btn btn-primary" onclick="openConsumptionSummaryModal()">Resumen de consumos</button><button class="btn btn-secondary" onclick="openMovement('Rebote')">Nuevo rebote</button><button class="btn btn-secondary" onclick="openMovement('Derrame')">Nuevo derrame</button></div></div>
+  <div class="headrow"><div><h1>Libro de movimientos</h1><div class="muted">Trazabilidad de ingresos, salidas y movimientos sin impacto físico.</div></div><div class="toolbar no-print"><button class="btn btn-secondary" onclick="syncMovementsOnDemand(true)" title="Sincronizar movimientos con la nube"><span class="icon">🔄</span> Actualizar</button><button class="btn btn-primary" onclick="openConsumptionSummaryModal()">Resumen de consumos</button><button class="btn btn-secondary" onclick="openMovement('Rebote')">Nuevo rebote</button><button class="btn btn-secondary" onclick="openMovement('Derrame')">Nuevo derrame</button></div></div>
   <div class="card no-print"><div class="filterbar"><div><label>Desde</label><input id="movFrom" class="field" type="date" onchange="renderMovementsV16()"></div><div><label>Hasta</label><input id="movTo" class="field" type="date" onchange="renderMovementsV16()"></div><div><label>Tipo</label><select id="movType" onchange="renderMovementsV16()"><option value="">Todos</option><option value="Producción">Producción (Todas)</option><option value="Producción Mendoza">Ingresos de producción de Mendoza</option><option value="Consumo de empleado">Consumo de empleado</option><option value="Anticipo empleado">Anticipo empleado</option><option value="Consumo interno - Buffet">Consumo interno - Buffet</option><option value="Rebote">Rebote</option><option value="Derrame">Derrame</option></select></div><div style="align-self:end"><button class="btn btn-secondary" onclick="clearMovFilters()">Limpiar</button> <button class="btn btn-primary" onclick="printSection('movements','Histórico de Movimientos')">Imprimir</button></div></div></div>
   <h2 class="report-title">Histórico de Movimientos</h2>
   <div class="card tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Referencia</th><th>Entrada total</th><th>Salida total</th><th>Sin impacto</th><th>Encargado</th><th>Turno</th><th class="no-print"></th></tr></thead><tbody id="movementsBody"></tbody></table></div>
@@ -244,7 +244,7 @@ window.addEventListener('unhandledrejection', function(event) {
 
 
 
-<script src="app.min.js?v=51" charset="utf-8"></script>
+<script src="app.min.js?v=52" charset="utf-8"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
