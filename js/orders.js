@@ -103,7 +103,16 @@ function populateFilters(){
     }
   }
 }
-function clearOrderFilters(){ofCarrier.value='';ofDate.value='';ofUser.value='';ofShift.value='';renderOrders()}
+function clearOrderFilters(){
+  if(document.getElementById('ofCarrier')) ofCarrier.value='';
+  if(document.getElementById('ofFrom')) ofFrom.value='';
+  if(document.getElementById('ofTo')) ofTo.value='';
+  if(document.getElementById('ofDate')) ofDate.value='';
+  if(document.getElementById('ofStatus')) ofStatus.value='';
+  if(document.getElementById('ofUser')) ofUser.value='';
+  if(document.getElementById('ofShift')) ofShift.value='';
+  renderOrders();
+}
 function clearMaterialFilters(){mfCarrier.value='';mfFrom.value='';mfTo.value='';mfSource.value='';renderMaterials()}
 function printSection(id,title){document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-target'));let p=document.getElementById(id);p.classList.add('print-target');let rt=p.querySelector('.report-title');if(rt)rt.textContent=title;window.print();p.classList.remove('print-target')}
 function legacyOpenOrderForm_v1(existingId){

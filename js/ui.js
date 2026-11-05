@@ -2477,11 +2477,14 @@ printSection=function(id,title){
   if(id==='orders'){
     let fCarrier = document.getElementById('ofCarrier')?.value;
     let fCarrierText = fCarrier ? ((db.fleteros||[]).find(f => f.id === fCarrier)?.name || fCarrier) : 'Todos';
-    let fDate = document.getElementById('ofDate')?.value || 'Todas';
+    let fFrom = document.getElementById('ofFrom')?.value || document.getElementById('ofDate')?.value || '';
+    let fTo = document.getElementById('ofTo')?.value || '';
     let fUser = document.getElementById('ofUser')?.value || 'Todos';
     let fShift = document.getElementById('ofShift')?.value || 'Todos';
+    let fStatus = document.getElementById('ofStatus')?.value || 'Todos';
+    let dateStr = (fFrom && fTo) ? `${fFrom} al ${fTo}` : (fFrom ? `Desde ${fFrom}` : (fTo ? `Hasta ${fTo}` : 'Todas'));
 
-    headerHtml=`<div style="margin-bottom:12px;font-size:12px;color:#333;background:#f5f5f5;padding:6px 10px;border-radius:4px;"><b>Filtros aplicados:</b> &nbsp; <b>Fecha:</b> ${v14Text(fDate)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(fShift)} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(fUser)} &nbsp;·&nbsp; <b>Fletero:</b> ${v14Text(fCarrierText)}</div>`;
+    headerHtml=`<div style="margin-bottom:12px;font-size:12px;color:#333;background:#f5f5f5;padding:6px 10px;border-radius:4px;"><b>Filtros aplicados:</b> &nbsp; <b>Fecha:</b> ${v14Text(dateStr)} &nbsp;·&nbsp; <b>Estado:</b> ${v14Text(fStatus)} &nbsp;·&nbsp; <b>Turno:</b> ${v14Text(fShift)} &nbsp;·&nbsp; <b>Encargado:</b> ${v14Text(fUser)} &nbsp;·&nbsp; <b>Fletero:</b> ${v14Text(fCarrierText)}</div>`;
 
     let summaryHtml = generateOrdersDispatchSummaryHtml();
     clone.innerHTML += summaryHtml;
@@ -2739,9 +2742,19 @@ function saveShiftMaterials() {
 
 function generateOrdersDispatchSummaryHtml() {
   let carrier=document.getElementById('ofCarrier')?.value||'',
-      date=document.getElementById('ofDate')?.value||'',
+      fromD=document.getElementById('ofFrom')?.value||document.getElementById('ofDate')?.value||'',
+      toD=document.getElementById('ofTo')?.value||'',
       user=document.getElementById('ofUser')?.value||'',
       shift=document.getElementById('ofShift')?.value||'';
+
+  function matchDate(dStr) {
+    if (!dStr) return false;
+    let d = dStr.slice(0, 10);
+    if (fromD && toD) return d >= fromD && d <= toD;
+    if (fromD) return d >= fromD;
+    if (toD) return d <= toD;
+    return true;
+  }
 
   let qtyByProduct = {};
   function addFardos(pid, physicalQty) {
@@ -2762,7 +2775,7 @@ function generateOrdersDispatchSummaryHtml() {
       // Discriminar cada entrega por fecha, encargado y turno
       ds.forEach(d => {
         let dDate = d.date ? d.date.slice(0, 10) : o.date;
-        if (date && dDate !== date) return;
+        if ((fromD || toD) && !matchDate(dDate)) return;
         if (user && d.user !== user) return;
         if (shift && d.shift !== shift) return;
 
@@ -2778,7 +2791,7 @@ function generateOrdersDispatchSummaryHtml() {
       }
       if (!isDespachada) return;
 
-      if (date && o.date !== date) return;
+      if ((fromD || toD) && !matchDate(o.date)) return;
       if (user && o.createdBy !== user) return;
       if (shift && o.createdShift !== shift) return;
 
@@ -2797,7 +2810,7 @@ function generateOrdersDispatchSummaryHtml() {
       let isEmp = m.type.startsWith('Consumo') || m.type.startsWith('Anticipo');
       if (!isMendoza && !isEmp) return false;
       
-      if (date && m.date.slice(0,10) !== date) return false;
+      if ((fromD || toD) && !matchDate(m.date)) return false;
       if (user && m.user !== user) return false;
       if (shift && m.shift !== shift) return false;
       return true;
