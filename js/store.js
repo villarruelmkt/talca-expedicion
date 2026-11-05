@@ -69,7 +69,7 @@ applyVerifiedStockV38();
 });
 
 // --- MODULE: FIREBASE COLLECTIONS SYNC ---
-const APP_BUILD_VERSION = 53;
+const APP_BUILD_VERSION = 54;
 
 function isAuthorizedWriter(userObjOrName) {
   if (!userObjOrName) return false;

@@ -50,25 +50,6 @@ function renderEditMovementBtn(g) {
   return '<td class="no-print"></td>';
 }
 
-function renderGroupedProductLines(g) {
-  if (!g || !g.movements || !g.movements.length) return '';
-  let prodMap = new Map();
-  g.movements.forEach(m => {
-    let pid = m.productId;
-    if (!pid) return;
-    let fardos = v16MovementFardos(m);
-    prodMap.set(pid, (prodMap.get(pid) || 0) + fardos);
-  });
-  if (!prodMap.size) return '';
-  let lines = [];
-  prodMap.forEach((fardos, pid) => {
-    let p = db.products.find(x => x.id === pid);
-    let pName = p ? p.name : pid;
-    lines.push(`• ${v14Text(pName)}: <b>${v16FmtFardos(fardos)}</b>`);
-  });
-  return `<div class="v16-movement-prods" style="font-size:10px;color:#374151;margin-top:2px;line-height:1.3;">${lines.join('<br>')}</div>`;
-}
-
 function v16GetFilteredMovementsList() {
   let list = v16GroupedMovements();
   let fromD = document.getElementById('movFrom')?.value;
@@ -225,11 +206,9 @@ window.generateMovementsProductsSummaryHtml = generateMovementsProductsSummaryHt
 function renderMovementsV16(){
   let body=document.getElementById('movementsBody');if(!body)return;
   let list=v16GetFilteredMovementsList();
-  let summaryEl = document.getElementById('movementsProductsSummary');
 
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:16px;">No hay movimientos registrados para los filtros seleccionados.</td></tr>';
-    if (summaryEl) summaryEl.innerHTML = '';
     return;
   }
 
@@ -245,10 +224,7 @@ function renderMovementsV16(){
 
   let rowsHtml = list.map(g=>`<tr>
     <td>${fmtDate(g.date)}</td>
-    <td>
-      <b>${v14Text(g.type)}</b>${g.count>1?`<span class="v16-group-badge">${g.count} productos</span>`:''}
-      ${renderGroupedProductLines(g)}
-    </td>
+    <td>${v14Text(g.type)}${g.count>1?`<span class="v16-group-badge">${g.count} productos</span>`:''}</td>
     <td>${v14Text(g.ref||'')}</td>
     <td>${g.input?v16FmtFardos(g.input):''}</td>
     <td>${g.output?v16FmtFardos(g.output):''}</td>
@@ -269,10 +245,6 @@ function renderMovementsV16(){
 
   rowsHtml += totalRowHtml;
   body.innerHTML = rowsHtml;
-
-  if (summaryEl) {
-    summaryEl.innerHTML = generateMovementsProductsSummaryHtml(list);
-  }
 }
 
 window.clearMovFilters = function() {

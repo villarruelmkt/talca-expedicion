@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Conversor de Base de Datos - Talca Expedición</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px 20px; background: #f3f5f9; color: #1e293b; }
+    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); max-width: 640px; margin: 0 auto; text-align: left; }
+    h2 { margin-top: 0; color: #0f172a; text-align: center; }
+    .subtitle { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px; line-height: 1.4; }
+    .input-box { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 25px; text-align: center; background: #f8fafc; cursor: pointer; margin-bottom: 20px; transition: border-color 0.2s; }
+    .input-box:hover { border-color: #3b82f6; }
+    input[type="file"] { margin: 0 auto; }
+    .audit-box { background: #f1f5f9; border-radius: 8px; padding: 15px; margin-top: 15px; font-size: 14px; }
+    .audit-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .stat-item { background: white; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; text-align: center; }
+    .stat-val { font-size: 18px; font-weight: bold; color: #1e3a8a; }
+    .stat-label { font-size: 12px; color: #64748b; }
+    .success-box { background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 12px; border-radius: 6px; margin-top: 15px; font-size: 13px; line-height: 1.4; }
+    .btn { background: #19417f; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; width: 100%; margin-top: 20px; transition: background 0.2s; }
+    .btn:hover { background: #143364; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Conversor de Base de Datos</h2>
+    <div class="subtitle">Adapta respaldos de <b>Logística Talca</b> (con claves en español y formato relacional) al formato compatible con <b>Talca Expedición Salta</b>.</div>
+    
+    <div class="input-box" onclick="document.getElementById('fileInput').click()">
+      <p style="margin: 0 0 10px 0; font-weight: 500;">Selecciona el archivo exportado (ej: expedicion-2026-XX-XX.json):</p>
+      <input type="file" id="fileInput" accept=".json" style="display:none;">
+      <button type="button" class="btn" style="width:auto;margin:0;padding:8px 16px;font-size:13px;background:#3b82f6;">Elegir archivo JSON</button>
+    </div>
+
+    <div id="resultContainer" style="display:none;">
+      <div class="audit-box">
+        <b>Datos reconocidos en el archivo:</b>
+        <div class="audit-grid">
+          <div class="stat-item"><div class="stat-val" id="statOrders">0</div><div class="stat-label">Órdenes</div></div>
+          <div class="stat-item"><div class="stat-val" id="statMoves">0</div><div class="stat-label">Movimientos</div></div>
+          <div class="stat-item"><div class="stat-val" id="statStock">0</div><div class="stat-label">Productos con Stock</div></div>
+          <div class="stat-item"><div class="stat-val" id="statFleteros">0</div><div class="stat-label">Fleteros</div></div>
+          <div class="stat-item"><div class="stat-val" id="statEmployees">0</div><div class="stat-label">Empleados</div></div>
+          <div class="stat-item"><div class="stat-val" id="statMaterials">0</div><div class="stat-label">Materiales</div></div>
+        </div>
+      </div>
+      
+      <div class="success-box">
+        ✅ <b>Conversión lista:</b> Haz clic en el botón de abajo para descargar el archivo compatible listo para subir a Talca Expedición Salta.
+      </div>
+
+      <button id="downloadBtn" class="btn">📥 Descargar Respaldo Compatible (.json)</button>
+    </div>
+  </div>
+
+  <script>
+    let convertedPayload = null;
+
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const src = JSON.parse(event.target.result);
+          const datos = src.datos || src.data || src;
+
+          // 1. Productos y stock
+          const prodMap = {};
+          const stock = {};
+          const stockBuckets = {};
+          const products = [];
+
+          (datos.productos || datos.products || []).forEach(p => {
+            const code = String(p.codigo || p.id);
+            prodMap[p.id] = code;
+            stock[code] = Number(p.stock || 0);
+
+            const pend = p.pendientes || {};
+            stockBuckets[code] = {
+              physical: Number(p.stock || 0),
+              preventa: Number(pend.preventa || 0),
+              distriC: Number(pend.distriC || 0),
+              distriInterior: Number(pend.distriInterior || 0),
+              oesteMendoza: Number(pend.oesteMendoza || 0),
+              oesteJeremias: Number(pend.oesteJeremias || 0),
+              sinCodificar: Number(p.sin_codificar || 0)
+            };
+
+            products.push({
+              id: code,
+              name: p.nombre || p.name,
+              alias: p.alias || '',
+              pack: p.unidades_pack || p.pack || 6,
+              perCut: p.packs_corte || p.perCut || 15,
+              cuts: p.cortes_pallet || p.cuts || 4,
+              active: p.activo !== false && p.active !== false,
+              employeeBenefit: !!(p.beneficio_empleado || p.employeeBenefit),
+              minStock: Number(p.minimo || p.minStock || 0),
+              criticalStock: Number(p.critico || p.criticalStock || 0)
+            });
+          });
+
+          // 2. Fleteros
+          const fleteroMap = {};
+          const fleteros = (datos.fleteros || []).map(f => {
+            const fId = f.id ? (String(f.id).startsWith('f_') ? f.id : 'f_' + f.id) : ('f_' + Math.random().toString(36).slice(2,7));
+            fleteroMap[f.id] = fId;
+            return {
+              id: fId,
+              name: f.nombre || f.name || '',
+              surname: f.apellido || f.surname || '',
+              company: f.empresa || f.company || '',
+              active: f.activo !== false && f.active !== false
+            };
+          });
+
+          // 3. Empleados
+          const employees = (datos.empleados || datos.employees || []).map(emp => ({
+            id: 'emp_' + (emp.legajo || emp.id),
+            legajo: String(emp.legajo || ''),
+            name: emp.nombre || emp.name || '',
+            surname: emp.apellido || emp.surname || '',
+            active: emp.activo !== false && emp.active !== false,
+            balance: Number(emp.saldo_fardos !== undefined ? emp.saldo_fardos : (emp.balance || 0)),
+            lastCredit: emp.lastCredit || ''
+          }));
+
+          // 4. Órdenes
+          const orders = (datos.ordenes || datos.orders || []).map(o => {
+            const reqLines = (o.detalles || o.requestLines || []).map(d => {
+              const pCode = d.codigo || prodMap[d.producto] || d.productId || String(d.producto || '');
+              return {
+                productId: pCode,
+                total: Number(d.cantidad_solicitada !== undefined ? d.cantidad_solicitada : (d.total || 0)),
+                resolvedTotal: Number(d.resuelto !== undefined ? d.resuelto : (d.resolvedTotal || 0))
+              };
+            });
+
+            const deliveries = (o.entregas || o.deliveries || []).map(del => {
+              const lines = (del.detalles || del.lines || []).map(dl => {
+                const pCode = dl.codigo || prodMap[dl.producto] || dl.productId || String(dl.producto || '');
+                return {
+                  productId: pCode,
+                  sourceProductId: pCode,
+                  total: Number(dl.cantidad_entregada !== undefined ? dl.cantidad_entregada : (dl.total || 0))
+                };
+              });
+              return {
+                id: del.id ? (String(del.id).startsWith('del_') ? del.id : 'del_' + del.id) : ('del_' + Math.random().toString(36).slice(2,7)),
+                date: del.fecha || del.date || o.fecha || o.date,
+                shift: del.turno || del.shift || o.turno || 'Mañana',
+                user: del.creado_por_nombre || del.user || 'Sistema',
+                palletIn: Number(del.pallets_entrada || del.palletIn || 0),
+                palletOut: Number(del.pallets_salida || del.palletOut || 0),
+                chapIn: Number(del.chapadur_entrada || del.chapIn || 0),
+                chapOut: Number(del.chapadur_salida || del.chapOut || 0),
+                note: del.observaciones || del.note || '',
+                stockJustification: del.justificacion_stock || del.stockJustification || '',
+                lines
+              };
+            });
+
+            let status = o.status || 'Pendiente';
+            const rawStatus = (o.estado_operativo || o.estado || '').toUpperCase();
+            if (rawStatus === 'DESPACHADA' || rawStatus === 'COMPLETA') status = 'Despachada';
+            else if (rawStatus === 'PARCIAL' || rawStatus === 'PARCIALMENTE DESPACHADA') status = 'Parcial';
+
+            const fId = fleteroMap[o.fletero] || (o.fletero ? 'f_' + o.fletero : (o.fleteroId || ''));
+
+            return {
+              id: o.id ? (String(o.id).startsWith('ord_') ? o.id : 'ord_' + o.id) : ('ord_' + Math.random().toString(36).slice(2,7)),
+              number: String(o.numero || o.number || o.id),
+              date: o.fecha || o.date || (o.creado_en ? o.creado_en.slice(0, 10) : ''),
+              createdAt: o.creado_en || o.createdAt || new Date().toISOString(),
+              createdShift: o.turno || o.createdShift || 'Mañana',
+              createdBy: o.creado_por_nombre || o.createdBy || '',
+              fleteroId: fId,
+              carrierSnapshot: o.carrierSnapshot || {
+                id: fId,
+                name: o.fletero_nombre || '',
+                surname: '',
+                company: ''
+              },
+              status,
+              billing: o.facturacion || o.billing || 'No aplica',
+              note: o.observaciones || o.note || '',
+              requestLines: reqLines,
+              deliveries: deliveries
+            };
+          });
+
+          // 5. Movimientos
+          const typeMap = {
+            'ORDEN_CARGA': 'Orden de carga',
+            'AJUSTE': 'Ajuste manual',
+            'PRODUCCION': 'Recepción desde Mendoza',
+            'TRANSFERENCIA': 'Transferencia',
+            'CONSUMO_EMPLEADO': 'Consumo de empleado',
+            'ANTICIPO_EMPLEADO': 'Anticipo empleado'
+          };
+
+          const movements = (datos.movimientos || datos.movements || []).map(m => {
+            const pCode = prodMap[m.producto] || m.productId || String(m.producto || '');
+            const dir = (m.direccion || m.dir || 'out').toLowerCase() === 'entrada' ? 'in' : ((m.direccion || m.dir || 'out').toLowerCase() === 'salida' ? 'out' : (m.dir || 'out'));
+            const type = typeMap[m.tipo] || m.type || 'Ajuste manual';
+
+            return {
+              id: m.id ? (String(m.id).startsWith('mov_') ? m.id : 'mov_' + m.id) : ('mov_' + Math.random().toString(36).slice(2,7)),
+              productId: pCode,
+              total: Number(m.cantidad !== undefined ? m.cantidad : (m.total || 0)),
+              dir,
+              type,
+              ref: m.referencia || m.ref || (m.orden ? String(m.orden) : ''),
+              note: m.observaciones || m.note || '',
+              user: m.usuario || m.user || 'Pablo Villarruel',
+              shift: m.turno || m.shift || 'Mañana',
+              date: m.fecha || m.date || new Date().toISOString().slice(0, 10)
+            };
+          });
+
+          // 6. Materiales
+          const materialMoves = (datos.materiales || datos.materialMoves || []).map(mat => {
+            const fId = fleteroMap[mat.fletero] || (mat.fletero ? 'f_' + mat.fletero : (mat.fleteroId || ''));
+            return {
+              id: mat.id ? (String(mat.id).startsWith('mat_') ? mat.id : 'mat_' + mat.id) : ('mat_' + Math.random().toString(36).slice(2,7)),
+              fleteroId: fId,
+              ref: mat.referencia || mat.ref || '',
+              source: mat.origen || mat.source || 'Carga por turno',
+              date: mat.fecha || mat.date || new Date().toISOString().slice(0, 10),
+              palletOut: Number(mat.pallets_salida !== undefined ? mat.pallets_salida : (mat.palletOut || 0)),
+              palletIn: Number(mat.pallets_entrada !== undefined ? mat.pallets_entrada : (mat.palletIn || 0)),
+              chapOut: Number(mat.chapadur_salida !== undefined ? mat.chapadur_salida : (mat.chapOut || 0)),
+              chapIn: Number(mat.chapadur_entrada !== undefined ? mat.chapadur_entrada : (mat.chapIn || 0)),
+              note: mat.observaciones || mat.note || ''
+            };
+          });
+
+          // 7. Contadores
+          let maxCE = 0, maxAE = 0;
+          (datos.comprobantes || []).forEach(c => {
+            const num = c.numero || '';
+            if (num.startsWith('CE-')) maxCE = Math.max(maxCE, parseInt(num.replace('CE-', ''), 10) || 0);
+            if (num.startsWith('AE-')) maxAE = Math.max(maxAE, parseInt(num.replace('AE-', ''), 10) || 0);
+          });
+
+          convertedPayload = {
+            app: 'Talca Expedición',
+            schemaVersion: 7,
+            exportedAt: new Date().toISOString(),
+            data: {
+              products,
+              stock,
+              stockBuckets,
+              orders,
+              movements,
+              fleteros,
+              employees,
+              materialMoves,
+              counts: datos.counts || [],
+              audit: datos.audit || [],
+              counters: datos.counters || { CE: maxCE, AE: maxAE }
+            }
+          };
+
+          // Actualizar UI
+          document.getElementById('statOrders').innerText = orders.length;
+          document.getElementById('statMoves').innerText = movements.length;
+          document.getElementById('statStock').innerText = Object.keys(stock).filter(k => stock[k] > 0).length;
+          document.getElementById('statFleteros').innerText = fleteros.length;
+          document.getElementById('statEmployees').innerText = employees.length;
+          document.getElementById('statMaterials').innerText = materialMoves.length;
+
+          document.getElementById('resultContainer').style.display = 'block';
+        } catch(err) {
+          alert('Error al procesar el archivo: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      if (!convertedPayload) return;
+      const blob = new Blob([JSON.stringify(convertedPayload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `talca_backup_compatible_${dateStr}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
